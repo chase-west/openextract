@@ -1,0 +1,45 @@
+node_modules/
+dist/
+release/
+python/dist/
+python/build/
+python/__pycache__/
+python/*.spec
+*.pyc
+.DS_Store
+Thumbs.db
+.env
+.vite/
+
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+*.spec
+
+# Electron
+release/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
+# Environment
+.env.local
+
+# Logs
+*.log
+npm-debug.log*

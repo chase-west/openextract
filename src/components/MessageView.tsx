@@ -32,11 +32,11 @@ export default function MessageView({ udid }: Props) {
 
   const filteredConversations = searchQuery
     ? conversations.filter(
-        (c) =>
-          c.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.chat_identifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.last_message_preview.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      (c) =>
+        c.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.chat_identifier.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.last_message_preview.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : conversations;
 
   const activeConversation = conversations.find((c) => c.chat_id === activeChat);
@@ -62,9 +62,8 @@ export default function MessageView({ udid }: Props) {
             <button
               key={conv.chat_id}
               onClick={() => loadMessages(conv.chat_id)}
-              className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                activeChat === conv.chat_id ? 'bg-blue-50' : ''
-              }`}
+              className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${activeChat === conv.chat_id ? 'bg-blue-50' : ''
+                }`}
             >
               <div className="flex justify-between items-start">
                 <div className="font-medium text-sm text-gray-900 truncate flex-1">
@@ -117,7 +116,7 @@ export default function MessageView({ udid }: Props) {
               )}
               <div className="space-y-1">
                 {messages.map((msg) => (
-                  <ChatBubble key={msg.message_id} message={msg} />
+                  <ChatBubble key={msg.message_id} message={msg} udid={udid} />
                 ))}
               </div>
               <div ref={messagesEndRef} />

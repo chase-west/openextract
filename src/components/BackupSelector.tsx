@@ -8,7 +8,7 @@ interface Props {
   loading: boolean;
   error: string | null;
   onRefresh: (path?: string) => Promise<void>;
-  onOpen: (udid: string, password?: string) => Promise<string>;
+  onOpen: (udid: string, password?: string, backupDir?: string) => Promise<string>;
 }
 
 export default function BackupSelector({ backups, loading, error, onRefresh, onOpen }: Props) {
@@ -21,12 +21,15 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
     onRefresh();
   }, []);
 
+  const [pendingBackupDir, setPendingBackupDir] = useState<string | undefined>(undefined);
+
   const handleOpen = async (backup: BackupInfo) => {
     setOpenError(null);
     if (backup.encrypted) {
       setPendingUdid(backup.udid);
+      setPendingBackupDir(backup.backup_dir);
     } else {
-      const status = await onOpen(backup.udid);
+      const status = await onOpen(backup.udid, undefined, backup.backup_dir);
       if (status === 'error') {
         setOpenError('Failed to open backup');
       }
@@ -36,7 +39,7 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
   const handlePasswordSubmit = async () => {
     if (!pendingUdid || !password) return;
     setOpenError(null);
-    const status = await onOpen(pendingUdid, password);
+    const status = await onOpen(pendingUdid, password, pendingBackupDir);
     if (status === 'error') {
       setOpenError('Incorrect password or corrupted backup');
     } else if (status === 'open') {
@@ -104,7 +107,7 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
                 {loading ? 'Decrypting...' : 'Unlock'}
               </button>
               <button
-                onClick={() => { setPendingUdid(null); setPassword(''); }}
+                onClick={() => { setPendingUdid(null); setPassword(''); setPendingBackupDir(undefined); }}
                 className="px-3 py-2 text-gray-600 text-sm hover:text-gray-800"
               >
                 Cancel

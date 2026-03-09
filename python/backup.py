@@ -151,13 +151,17 @@ class BackupManager:
             home = Path.home()
             dirs.append(str(home / "Library" / "Application Support" / "MobileSync" / "Backup"))
         elif sys.platform == "win32":
+            # APPDATA — classic iTunes (Apple website installer)
             appdata = os.environ.get("APPDATA", "")
             if appdata:
                 dirs.append(os.path.join(appdata, "Apple Computer", "MobileSync", "Backup"))
-                # Also check the newer "Apple" path
                 dirs.append(os.path.join(appdata, "Apple", "MobileSync", "Backup"))
+            # LOCALAPPDATA — Apple Devices app (Microsoft Store, Windows 11+)
+            localappdata = os.environ.get("LOCALAPPDATA", "")
+            if localappdata:
+                dirs.append(os.path.join(localappdata, "Apple", "MobileSync", "Backup"))
+                dirs.append(os.path.join(localappdata, "Apple Computer", "MobileSync", "Backup"))
         else:
-            # Linux - user might have copied a backup here
             home = Path.home()
             dirs.append(str(home / "MobileSync" / "Backup"))
 
@@ -256,15 +260,28 @@ class BackupManager:
 
         return info
 
-    def open_backup(self, udid: str, password: Optional[str] = None) -> dict:
-        """Open a backup for reading. Decrypts if encrypted and password provided."""
-        # Find the backup directory
-        all_backups = self.list_backups()
+    def open_backup(self, udid: str, password: Optional[str] = None,
+                    backup_dir: Optional[str] = None) -> dict:
+        """
+        Open a backup for reading. Decrypts if encrypted and password provided.
+        Accepts an optional backup_dir to skip re-scanning — important when the
+        backup was found via a custom/browse path or a non-default location.
+        """
         backup_info = None
-        for b in all_backups["backups"]:
-            if b["udid"] == udid:
-                backup_info = b
-                break
+
+        # Fast path: use the provided directory directly
+        if backup_dir and os.path.isdir(backup_dir):
+            backup_info = self._read_backup_info(backup_dir)
+            if not backup_info or backup_info.get("udid") != udid:
+                backup_info = None  # directory doesn't match — fall through to scan
+
+        # Slow path: scan all default locations
+        if not backup_info:
+            all_backups = self.list_backups()
+            for b in all_backups["backups"]:
+                if b["udid"] == udid:
+                    backup_info = b
+                    break
 
         if not backup_info:
             raise ValueError(f"Backup not found: {udid}")

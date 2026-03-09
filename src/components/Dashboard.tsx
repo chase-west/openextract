@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BackupInfo } from '../hooks/useBackup';
 import MessageView from './MessageView';
+import PhotoGallery from './photos/PhotoGallery';
 
 type Tab = 'messages' | 'photos' | 'voicemail' | 'calls' | 'contacts' | 'notes';
 
@@ -44,9 +45,7 @@ export default function Dashboard({ backup }: Props) {
       {/* Content area */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'messages' && <MessageView udid={backup.udid} />}
-        {activeTab === 'photos' && (
-          <PlaceholderView title="Photos" description="Photo gallery coming soon" icon="📷" />
-        )}
+        {activeTab === 'photos' && <PhotoGallery backup={backup} />}
         {activeTab === 'voicemail' && (
           <PlaceholderView title="Voicemail" description="Voicemail player coming soon" icon="📞" />
         )}

@@ -37,9 +37,11 @@ class SidecarServer:
             "get_messages": self.get_messages,
             "get_attachment": self.get_attachment,
             "search_messages": self.search_messages,
+            "list_albums": self.list_albums,
             "list_photos": self.list_photos,
             "get_photo_thumbnail": self.get_photo_thumbnail,
             "get_photo": self.get_photo,
+            "get_photo_metadata": self.get_photo_metadata,
             "list_voicemails": self.list_voicemails,
             "get_voicemail_audio": self.get_voicemail_audio,
             "list_calls": self.list_calls,
@@ -59,7 +61,8 @@ class SidecarServer:
     def open_backup(self, params):
         udid = params["udid"]
         password = params.get("password")
-        return self.backup_manager.open_backup(udid, password=password)
+        backup_dir = params.get("backup_dir")
+        return self.backup_manager.open_backup(udid, password=password, backup_dir=backup_dir)
 
     def validate_password(self, params):
         udid = params["udid"]
@@ -95,12 +98,24 @@ class SidecarServer:
         contacts = self.contact_resolver.load_contacts(backup)
         return self.message_extractor.search_messages(backup, query, contacts, chat_id)
 
+    def list_albums(self, params):
+        udid = params["udid"]
+        backup = self.backup_manager.get_open_backup(udid)
+        return self.photo_extractor.list_albums(backup)
+
     def list_photos(self, params):
         udid = params["udid"]
         offset = params.get("offset", 0)
-        limit = params.get("limit", 50)
+        limit = params.get("limit", 100)
+        album_id = params.get("album_id")
         backup = self.backup_manager.get_open_backup(udid)
-        return self.photo_extractor.list_photos(backup, offset, limit)
+        return self.photo_extractor.list_photos(backup, offset, limit, album_id)
+
+    def get_photo_metadata(self, params):
+        udid = params["udid"]
+        asset_uuid = params["asset_uuid"]
+        backup = self.backup_manager.get_open_backup(udid)
+        return self.photo_extractor.get_photo_metadata(backup, asset_uuid)
 
     def get_photo_thumbnail(self, params):
         udid = params["udid"]
@@ -159,9 +174,12 @@ class SidecarServer:
     def export_photos(self, params):
         udid = params["udid"]
         output_dir = params["output_dir"]
-        include_videos = params.get("include_videos", True)
+        options = params.get("options", {})
+        # Backwards-compat: honour flat include_videos param if no options dict
+        if not options and "include_videos" in params:
+            options = {"include_videos": params["include_videos"]}
         backup = self.backup_manager.get_open_backup(udid)
-        return self.photo_extractor.export_photos(backup, output_dir, include_videos)
+        return self.photo_extractor.export_photos(backup, output_dir, options)
 
     def handle_request(self, request):
         req_id = request.get("id")
@@ -178,6 +196,13 @@ class SidecarServer:
             result = self.methods[method](params)
             return {"id": req_id, "result": result}
         except Exception as e:
+            import traceback
+            err_str = traceback.format_exc()
+            try:
+                with open("python_log.txt", "a", encoding="utf-8") as f:
+                    f.write(f"[RPC ERROR] {method}: {err_str}\n")
+            except:
+                pass
             traceback.print_exc(file=sys.stderr)
             return {
                 "id": req_id,
@@ -207,5 +232,14 @@ class SidecarServer:
 
 
 if __name__ == "__main__":
+    import sys
+    if "--debug" in sys.argv:
+        try:
+            import debugpy
+            debugpy.listen(("0.0.0.0", 5678))
+            print('{"status":"info", "message":"debugpy listening on port 5678. Debugger can attach at any time!"}', file=sys.stderr)
+        except Exception as e:
+            print(f'{{"status":"error", "message":"Failed to start debugger: {e}"}}', file=sys.stderr)
+
     server = SidecarServer()
     server.run()

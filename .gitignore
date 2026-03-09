@@ -43,3 +43,9 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
+python_log.txt
+temp_stderr.txt
+temp_stdout.txt
+
+# Claude worktrees
+.claude/

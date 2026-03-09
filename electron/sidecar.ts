@@ -7,7 +7,7 @@ interface PendingRequest {
   timeout: NodeJS.Timeout;
 }
 
-class PythonSidecar {
+export class PythonSidecar {
   private process: any = null;
   private pythonPath: string;
   private pythonArgs: string[];
@@ -35,16 +35,21 @@ class PythonSidecar {
 
       this.process.stderr.on('data', (data: Buffer) => {
         const msg = data.toString().trim();
-        if (msg) console.error(`[Python] ${msg}`);
+        if (msg) {
+          console.error(`[Python] ${msg}`);
+          require('fs').appendFileSync('python_log.txt', `[STDERR] ${msg}\n`);
+        }
       });
 
       this.process.on('error', (err: Error) => {
         console.error('Failed to start Python sidecar:', err);
+        require('fs').appendFileSync('python_log.txt', `[ERROR STARTING] ${err.message}\n`);
         reject(err);
       });
 
       this.process.on('exit', (code: number) => {
         console.log(`Python sidecar exited with code ${code}`);
+        require('fs').appendFileSync('python_log.txt', `[EXIT] code ${code}\n`);
         // Reject all pending requests
         for (const [id, req] of this.pending) {
           clearTimeout(req.timeout);
@@ -118,4 +123,3 @@ class PythonSidecar {
   }
 }
 
-module.exports = { PythonSidecar };

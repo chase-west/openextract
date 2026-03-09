@@ -6,12 +6,76 @@ Handles iMessage, SMS, MMS conversations with contact resolution.
 import sqlite3
 import base64
 import os
+import plistlib
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 # Apple Cocoa epoch: Jan 1, 2001
 APPLE_EPOCH = datetime(2001, 1, 1, tzinfo=timezone.utc)
 NANOSECOND_THRESHOLD = 1_000_000_000_000  # Dates above this are in nanoseconds
+
+def parse_attributed_body(data: bytes) -> str:
+    """Extract plain text from an NSAttributedString (NSKeyedArchiver BLOB or TypedStream)."""
+    if not data:
+        return ""
+    
+    # 1. Try NSKeyedArchiver (bplist00)
+    if data.startswith(b'bplist00'):
+        try:
+            plist = plistlib.loads(data)
+            objects = plist.get("$objects", [])
+            candidate = ""
+            for obj in objects:
+                # Find the longest string that isn't a known Apple structural class
+                if isinstance(obj, str) and obj not in ("NSString", "NSMutableString", "NSAttributedString", "NSMutableAttributedString", "NSObject", "NSDictionary", "NSMutableDictionary"):
+                    # Skip internal Apple attribute names and UUIDs
+                    if "kIMFileTransferGUID" in obj or "kIMMessagePart" in obj or re.match(r'^\$?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$', obj, re.IGNORECASE):
+                        continue
+                    # Skip common attachment filenames
+                    if re.search(r'[\d_A-Fa-f\-]+(\.fullsizerender)*\.(jpeg|jpg|heic|heif|png|gif|mov|mp4|m4a|caf|pdf|doc|docx)', obj, re.IGNORECASE):
+                        continue
+                    if len(obj) > len(candidate):
+                        candidate = obj
+            if candidate:
+                return candidate
+        except Exception:
+            pass
+
+    # 2. Try TypedStream (or corrupted bplist) fallback
+    try:
+        # Decode as utf-8, replacing invalid chars to preserve emojis and text
+        text = data.decode('utf-8', errors='replace')
+        
+        # Clean Apple internal identifiers and UUIDs
+        text = re.sub(r'__kIM\w+', '', text)
+        text = re.sub(r'\$?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}', '', text, flags=re.IGNORECASE)
+        # remove attachment filenames
+        text = re.sub(r'[\d_A-Fa-f\-]+(\.fullsizerender)*\.(jpeg|jpg|heic|heif|png|gif|mov|mp4|m4a|caf|pdf|doc|docx)', '', text, flags=re.IGNORECASE)
+
+        # Remove common Apple class names from the raw stream
+        classes = ["NSMutableAttributedString", "NSAttributedString", "NSString", "NSMutableString", "NSDictionary", "NSMutableDictionary", "NSObject"]
+        for c in classes:
+            text = text.replace(c, "")
+            
+        # Split by control characters EXCEPT newline (\x0a) and carriage return (\x0d)
+        # This breaks the binary payload into readable string blocks
+        parts = re.split(r'[\x00-\x08\x0b\x0c\x0e-\x1f]+', text)
+        
+        candidate = ""
+        for p in parts:
+            p = p.strip()
+            p = p.replace('\ufffc', '').replace('\ufffd', '').strip()
+            
+            # Check length to avoid picking up random 1-2 char binary artifacts
+            if p and len(p) > len(candidate) and len(p) > 1:
+                candidate = p
+                
+        return candidate
+    except Exception:
+        pass
+        
+    return ""
 
 
 def apple_date_to_iso(apple_timestamp) -> Optional[str]:
@@ -57,7 +121,7 @@ class MessageExtractor:
                     c.service_name,
                     COUNT(cmj.message_id) AS message_count,
                     MAX(m.date) AS last_message_date,
-                    (SELECT m2.text FROM message m2
+                    (SELECT coalesce(m2.text, '[Message contents hidden]') FROM message m2
                      INNER JOIN chat_message_join cmj2 ON cmj2.message_id = m2.ROWID
                      WHERE cmj2.chat_id = c.ROWID
                      ORDER BY m2.date DESC LIMIT 1) AS last_message_text
@@ -103,27 +167,58 @@ class MessageExtractor:
 
         messages = []
         try:
-            rows = conn.execute("""
-                SELECT
-                    m.ROWID AS message_id,
-                    m.text,
-                    m.date,
-                    m.date_read,
-                    m.date_delivered,
-                    m.is_from_me,
-                    m.is_read,
-                    m.cache_has_attachments,
-                    m.associated_message_type,
-                    m.group_title,
-                    h.id AS handle_id_str,
-                    h.uncanonicalized_id
-                FROM message m
-                LEFT JOIN handle h ON h.ROWID = m.handle_id
-                INNER JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
-                WHERE cmj.chat_id = ?
-                ORDER BY m.date ASC
-                LIMIT ? OFFSET ?
-            """, (chat_id, limit, offset)).fetchall()
+            try:
+                # Try iOS 14+ schema with attributedBody
+                rows = conn.execute("""
+                    SELECT
+                        m.ROWID AS message_id,
+                        m.text,
+                        m.attributedBody,
+                        m.date,
+                        m.date_read,
+                        m.date_delivered,
+                        m.is_from_me,
+                        m.is_read,
+                        m.cache_has_attachments,
+                        m.associated_message_type,
+                        m.group_title,
+                        h.id AS handle_id_str,
+                        h.uncanonicalized_id
+                    FROM message m
+                    LEFT JOIN handle h ON h.ROWID = m.handle_id
+                    INNER JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+                    WHERE cmj.chat_id = ?
+                    ORDER BY m.date DESC
+                    LIMIT ? OFFSET ?
+                """, (chat_id, limit, offset)).fetchall()
+                has_attributed_body = True
+            except sqlite3.OperationalError:
+                # Fallback to iOS 13- schema
+                rows = conn.execute("""
+                    SELECT
+                        m.ROWID AS message_id,
+                        m.text,
+                        m.date,
+                        m.date_read,
+                        m.date_delivered,
+                        m.is_from_me,
+                        m.is_read,
+                        m.cache_has_attachments,
+                        m.associated_message_type,
+                        m.group_title,
+                        h.id AS handle_id_str,
+                        h.uncanonicalized_id
+                    FROM message m
+                    LEFT JOIN handle h ON h.ROWID = m.handle_id
+                    INNER JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+                    WHERE cmj.chat_id = ?
+                    ORDER BY m.date DESC
+                    LIMIT ? OFFSET ?
+                """, (chat_id, limit, offset)).fetchall()
+                has_attributed_body = False
+
+            # Reverse the descending array so it renders top to bottom in chronological order
+            rows = list(rows)[::-1]
 
             for row in rows:
                 handle = row["handle_id_str"] or ""
@@ -133,9 +228,29 @@ class MessageExtractor:
                 elif row["uncanonicalized_id"] and row["uncanonicalized_id"] in contacts:
                     sender_name = contacts[row["uncanonicalized_id"]]
 
+                # Resolve message text using attributedBody fallback if it exists in the row
+                msg_text = row["text"]
+                if not msg_text and has_attributed_body and row["attributedBody"]:
+                    msg_text = parse_attributed_body(row["attributedBody"])
+
+                if msg_text:
+                    # Clean up Apple object replacement characters and attachment identifiers
+                    msg_text = msg_text.replace('\ufffc', '').replace('\ufffd', '').strip()
+                    msg_text = re.sub(r'__kIM\w+', '', msg_text)
+                    msg_text = re.sub(r'\$?[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}', '', msg_text, flags=re.IGNORECASE)
+                    msg_text = re.sub(r'[\d_A-Fa-f\-]+(\.fullsizerender)*\.(jpeg|jpg|heic|heif|png|gif|mov|mp4|m4a|caf|pdf|doc|docx)', '', msg_text, flags=re.IGNORECASE)
+                    
+                    # Remove junk wrapper quotes, spaces, or newlines left from stripping
+                    msg_text = re.sub(r'^[ \n"\uFFFD\uFFFC]+', '', msg_text)
+                    msg_text = re.sub(r'[ \n"\uFFFD\uFFFC]+$', '', msg_text)
+                    msg_text = msg_text.strip()
+                    
+                if not msg_text:
+                    msg_text = "[Attachment]" if bool(row["cache_has_attachments"]) else "[no content]"
+
                 msg = {
                     "message_id": row["message_id"],
-                    "text": row["text"],
+                    "text": msg_text,
                     "date": apple_date_to_iso(row["date"]),
                     "is_from_me": bool(row["is_from_me"]),
                     "sender": "me" if row["is_from_me"] else sender_name,
@@ -230,11 +345,29 @@ class MessageExtractor:
                 return {"error": "Attachment file not found in backup"}
 
             with open(file_path, "rb") as f:
-                data = base64.b64encode(f.read()).decode("ascii")
+                raw_data = f.read()
+
+            mime_type = row["mime_type"]
+            filename_lower = (row["filename"] or "").lower()
+            if mime_type in ("image/heic", "image/heif") or filename_lower.endswith(".heic") or filename_lower.endswith(".heif"):
+                try:
+                    import io
+                    import pillow_heif
+                    from PIL import Image
+                    pillow_heif.register_heif_opener()
+                    img = Image.open(io.BytesIO(raw_data))
+                    buf = io.BytesIO()
+                    img.save(buf, format="JPEG")
+                    raw_data = buf.getvalue()
+                    mime_type = "image/jpeg"
+                except Exception as e:
+                    pass
+
+            data = base64.b64encode(raw_data).decode("ascii")
 
             return {
                 "data": data,
-                "mime_type": row["mime_type"],
+                "mime_type": mime_type,
                 "filename": row["transfer_name"] or os.path.basename(row["filename"]),
             }
         finally:

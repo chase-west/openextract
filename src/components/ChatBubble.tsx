@@ -1,12 +1,14 @@
 import { Message } from '../hooks/useMessages';
 import { formatTime, formatDateTime } from '../lib/dates';
 import { useState } from 'react';
+import AttachmentViewer from './AttachmentViewer';
 
 interface Props {
   message: Message;
+  udid: string;
 }
 
-export default function ChatBubble({ message }: Props) {
+export default function ChatBubble({ message, udid }: Props) {
   const [showTimestamp, setShowTimestamp] = useState(false);
 
   // Skip reaction messages in the main flow
@@ -26,21 +28,24 @@ export default function ChatBubble({ message }: Props) {
 
       <div
         onClick={() => setShowTimestamp(!showTimestamp)}
-        className={`max-w-[75%] px-3 py-2 rounded-2xl cursor-pointer select-text ${
-          isFromMe
+        className={`max-w-[75%] px-3 py-2 rounded-2xl cursor-pointer select-text ${isFromMe
             ? 'bg-imessage-blue text-white rounded-br-md'
             : 'bg-bubble-gray text-gray-900 rounded-bl-md'
-        }`}
+          }`}
       >
-        {hasText ? (
+        {hasText && (
           <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>
-        ) : message.has_attachments ? (
-          <div className="text-sm italic opacity-75">
-            📎 {message.attachments?.length
-              ? message.attachments.map((a) => a.transfer_name || a.mime_type).join(', ')
-              : 'Attachment'}
+        )}
+
+        {message.has_attachments && message.attachments && (
+          <div className={`flex flex-col space-y-2 ${hasText ? 'mt-2' : ''}`}>
+            {message.attachments.map((attachment) => (
+              <AttachmentViewer key={attachment.attachment_id} udid={udid} attachment={attachment} />
+            ))}
           </div>
-        ) : (
+        )}
+
+        {!hasText && !message.has_attachments && (
           <p className="text-sm italic opacity-50">[No content]</p>
         )}
       </div>

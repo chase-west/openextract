@@ -14,7 +14,7 @@ interface Props {
 export default function BackupSelector({ backups, loading, error, onRefresh, onOpen }: Props) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [pendingUdid, setPendingUdid] = useState<string | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<BackupInfo | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,13 +37,13 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
   };
 
   const handlePasswordSubmit = async () => {
-    if (!pendingUdid || !password) return;
+    if (!pendingBackup || !password) return;
     setOpenError(null);
     const status = await onOpen(pendingUdid, password, pendingBackupDir);
     if (status === 'error') {
       setOpenError('Incorrect password or corrupted backup');
     } else if (status === 'open') {
-      setPendingUdid(null);
+      setPendingBackup(null);
       setPassword('');
     }
   };
@@ -76,7 +76,7 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
         )}
 
         {/* Password prompt modal */}
-        {pendingUdid && (
+        {pendingBackup && (
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm font-medium text-blue-800 mb-3">
               This backup is encrypted. Enter your backup password:

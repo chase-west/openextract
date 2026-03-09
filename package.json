@@ -2,7 +2,7 @@
   "name": "openextract",
   "version": "0.1.0",
   "description": "Free, open-source iPhone backup extractor",
-  "main": "electron/main.js",
+  "main": "dist-electron/main.js",
   "author": "OpenExtract Contributors",
   "license": "MIT",
   "scripts": {
@@ -41,7 +41,7 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*.js",
+      "dist-electron/**/*.js",
       "python/dist/**/*"
     ],
     "extraResources": [

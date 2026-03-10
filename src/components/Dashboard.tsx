@@ -3,6 +3,8 @@ import { BackupInfo } from '../hooks/useBackup';
 import MessageView from './MessageView';
 import PhotoGallery from './photos/PhotoGallery';
 import VoicemailView from './voicemail/VoicemailView';
+import CallsView from './calls/CallsView';
+import ContactsView from './contacts/ContactsView';
 
 type Tab = 'messages' | 'photos' | 'voicemail' | 'calls' | 'contacts' | 'notes';
 
@@ -47,12 +49,8 @@ export default function Dashboard({ backup }: Props) {
         {activeTab === 'messages' && <MessageView udid={backup.udid} />}
         {activeTab === 'photos' && <PhotoGallery backup={backup} />}
         {activeTab === 'voicemail' && <VoicemailView backup={backup} />}
-        {activeTab === 'calls' && (
-          <PlaceholderView title="Call History" description="Call log coming soon" icon="📋" />
-        )}
-        {activeTab === 'contacts' && (
-          <PlaceholderView title="Contacts" description="Contact browser coming soon" icon="👤" />
-        )}
+        {activeTab === 'calls' && <CallsView backup={backup} />}
+        {activeTab === 'contacts' && <ContactsView backup={backup} />}
         {activeTab === 'notes' && (
           <PlaceholderView title="Notes" description="Notes viewer coming soon" icon="📝" />
         )}

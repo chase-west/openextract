@@ -49,6 +49,7 @@ class SidecarServer:
             "list_notes": self.list_notes,
             "export_conversation": self.export_conversation,
             "export_photos": self.export_photos,
+            "export_voicemails": self.export_voicemails,
         }
 
     def ping(self, params):
@@ -180,6 +181,13 @@ class SidecarServer:
             options = {"include_videos": params["include_videos"]}
         backup = self.backup_manager.get_open_backup(udid)
         return self.photo_extractor.export_photos(backup, output_dir, options)
+
+    def export_voicemails(self, params):
+        udid = params["udid"]
+        output_dir = params["output_dir"]
+        backup = self.backup_manager.get_open_backup(udid)
+        contacts = self.contact_resolver.load_contacts(backup)
+        return self.voicemail_extractor.export_voicemails(backup, contacts, output_dir)
 
     def handle_request(self, request):
         req_id = request.get("id")

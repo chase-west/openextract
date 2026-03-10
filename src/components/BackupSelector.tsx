@@ -26,7 +26,7 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
   const handleOpen = async (backup: BackupInfo) => {
     setOpenError(null);
     if (backup.encrypted) {
-      setPendingUdid(backup.udid);
+      setPendingBackup(backup);
       setPendingBackupDir(backup.backup_dir);
     } else {
       const status = await onOpen(backup.udid, undefined, backup.backup_dir);
@@ -39,7 +39,7 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
   const handlePasswordSubmit = async () => {
     if (!pendingBackup || !password) return;
     setOpenError(null);
-    const status = await onOpen(pendingUdid, password, pendingBackupDir);
+    const status = await onOpen(pendingBackup.udid, password, pendingBackupDir);
     if (status === 'error') {
       setOpenError('Incorrect password or corrupted backup');
     } else if (status === 'open') {
@@ -107,7 +107,7 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
                 {loading ? 'Decrypting...' : 'Unlock'}
               </button>
               <button
-                onClick={() => { setPendingUdid(null); setPassword(''); setPendingBackupDir(undefined); }}
+                onClick={() => { setPendingBackup(null); setPassword(''); setPendingBackupDir(undefined); }}
                 className="px-3 py-2 text-gray-600 text-sm hover:text-gray-800"
               >
                 Cancel
@@ -136,7 +136,7 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
 
           {backups.map((backup) => (
             <button
-              key={backup.udid}
+              key={backup.backup_dir || backup.udid}
               onClick={() => handleOpen(backup)}
               disabled={loading}
               className="w-full text-left p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all disabled:opacity-50"

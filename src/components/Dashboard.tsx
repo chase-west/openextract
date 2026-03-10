@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BackupInfo } from '../hooks/useBackup';
 import MessageView from './MessageView';
 import PhotoGallery from './photos/PhotoGallery';
+import VoicemailView from './voicemail/VoicemailView';
 
 type Tab = 'messages' | 'photos' | 'voicemail' | 'calls' | 'contacts' | 'notes';
 
@@ -29,11 +30,10 @@ export default function Dashboard({ backup }: Props) {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center text-xs transition-colors ${
-              activeTab === tab.id
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-            }`}
+            className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center text-xs transition-colors ${activeTab === tab.id
+              ? 'bg-blue-100 text-blue-700'
+              : 'text-gray-500 hover:bg-gray-200 hover:text-gray-700'
+              }`}
             title={tab.label}
           >
             <span className="text-lg">{tab.icon}</span>
@@ -46,9 +46,7 @@ export default function Dashboard({ backup }: Props) {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'messages' && <MessageView udid={backup.udid} />}
         {activeTab === 'photos' && <PhotoGallery backup={backup} />}
-        {activeTab === 'voicemail' && (
-          <PlaceholderView title="Voicemail" description="Voicemail player coming soon" icon="📞" />
-        )}
+        {activeTab === 'voicemail' && <VoicemailView backup={backup} />}
         {activeTab === 'calls' && (
           <PlaceholderView title="Call History" description="Call log coming soon" icon="📋" />
         )}

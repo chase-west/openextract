@@ -57,15 +57,3 @@ export default function Dashboard({ backup }: Props) {
     </div>
   );
 }
-
-function PlaceholderView({ title, description, icon }: { title: string; description: string; icon: string }) {
-  return (
-    <div className="flex items-center justify-center h-full text-gray-500">
-      <div className="text-center">
-        <div className="text-5xl mb-4">{icon}</div>
-        <h3 className="text-lg font-medium text-gray-700">{title}</h3>
-        <p className="text-sm mt-1">{description}</p>
-      </div>
-    </div>
-  );
-}

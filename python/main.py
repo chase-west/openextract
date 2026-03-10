@@ -205,7 +205,6 @@ class SidecarServer:
         output_dir = params["output_dir"]
         backup = self.backup_manager.get_open_backup(udid)
         return self.note_extractor.export_notes(backup, note_ids, fmt, output_dir)
-
     def handle_request(self, request):
         req_id = request.get("id")
         method = request.get("method")

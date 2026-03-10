@@ -51,6 +51,7 @@ class SidecarServer:
             "export_photos": self.export_photos,
             "export_voicemails": self.export_voicemails,
             "export_calls": self.export_calls,
+            "export_notes": self.export_notes,
         }
 
     def ping(self, params):
@@ -196,6 +197,14 @@ class SidecarServer:
         backup = self.backup_manager.get_open_backup(udid)
         contacts = self.contact_resolver.load_contacts(backup)
         return self.call_extractor.export_calls_csv(backup, contacts, output_dir)
+
+    def export_notes(self, params):
+        udid = params["udid"]
+        note_ids = params["note_ids"]
+        fmt = params.get("format", "pdf")
+        output_dir = params["output_dir"]
+        backup = self.backup_manager.get_open_backup(udid)
+        return self.note_extractor.export_notes(backup, note_ids, fmt, output_dir)
 
     def handle_request(self, request):
         req_id = request.get("id")

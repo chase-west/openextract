@@ -5,6 +5,7 @@ import PhotoGallery from './photos/PhotoGallery';
 import VoicemailView from './voicemail/VoicemailView';
 import CallsView from './calls/CallsView';
 import ContactsView from './contacts/ContactsView';
+import NotesView from './notes/NotesView';
 
 type Tab = 'messages' | 'photos' | 'voicemail' | 'calls' | 'contacts' | 'notes';
 
@@ -51,9 +52,7 @@ export default function Dashboard({ backup }: Props) {
         {activeTab === 'voicemail' && <VoicemailView backup={backup} />}
         {activeTab === 'calls' && <CallsView backup={backup} />}
         {activeTab === 'contacts' && <ContactsView backup={backup} />}
-        {activeTab === 'notes' && (
-          <PlaceholderView title="Notes" description="Notes viewer coming soon" icon="📝" />
-        )}
+        {activeTab === 'notes' && <NotesView backup={backup} />}
       </div>
     </div>
   );

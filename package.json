@@ -46,18 +46,28 @@
       "dist-electron/**/*.js",
       "python/dist/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "python/dist/openextract-engine",
-        "to": "python/openextract-engine"
-      }
-    ],
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
+    },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "extraResources": [
+        {
+          "from": "python/dist/openextract-engine",
+          "to": "python/openextract-engine"
+        }
+      ]
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "extraResources": [
+        {
+          "from": "python/dist/openextract-engine.exe",
+          "to": "python/openextract-engine.exe"
+        }
+      ]
     }
   }
 }

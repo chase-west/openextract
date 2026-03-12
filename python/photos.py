@@ -54,6 +54,27 @@ _MIME_MAP = {
 }
 
 
+def _build_dcim_path(directory: str, filename: str) -> str:
+    """
+    Build the CameraRollDomain-relative path for a DCIM asset.
+
+    ZDIRECTORY in Photos.sqlite varies by iOS version:
+      - Modern iOS:  "106APPLE"          → Media/DCIM/106APPLE/IMG.HEIC
+      - Older iOS:   "DCIM/106APPLE"     → same result (strip leading DCIM/)
+
+    Always strip a leading "DCIM/" (or bare "DCIM") so we never produce a
+    doubled path like Media/DCIM/DCIM/106APPLE/….
+    """
+    directory = directory.lstrip("/")
+    if directory.upper() == "DCIM":
+        directory = ""
+    elif directory.upper().startswith("DCIM/"):
+        directory = directory[5:]
+    if directory:
+        return f"Media/DCIM/{directory}/{filename}"
+    return f"Media/DCIM/{filename}"
+
+
 def _apple_ts_to_iso(ts) -> Optional[str]:
     """Convert Apple CoreData timestamp (seconds since 2001-01-01) to ISO 8601."""
     if ts is None:
@@ -416,10 +437,7 @@ class PhotoExtractor:
         for row in rows:
             directory = row["ZDIRECTORY"] or ""
             filename = row["ZFILENAME"] or ""
-            if directory:
-                dcim_path = f"Media/DCIM/{directory}/{filename}"
-            else:
-                dcim_path = f"Media/DCIM/{filename}"
+            dcim_path = _build_dcim_path(directory, filename)
 
             if backup.encrypted:
                 # Manifest.db is encrypted — cannot look up hash directly.
@@ -544,10 +562,7 @@ class PhotoExtractor:
 
             directory = row["ZDIRECTORY"] or ""
             filename = row["ZFILENAME"] or ""
-            dcim_path = (
-                f"Media/DCIM/{directory}/{filename}" if directory
-                else f"Media/DCIM/{filename}"
-            )
+            dcim_path = _build_dcim_path(directory, filename)
             if backup.encrypted:
                 file_hash = f"dcim:{dcim_path}"
             else:

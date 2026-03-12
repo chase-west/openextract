@@ -54,6 +54,27 @@ _MIME_MAP = {
 }
 
 
+def _build_dcim_path(directory: str, filename: str) -> str:
+    """
+    Build the CameraRollDomain-relative path for a DCIM asset.
+
+    ZDIRECTORY in Photos.sqlite varies by iOS version:
+      - Modern iOS:  "106APPLE"          → Media/DCIM/106APPLE/IMG.HEIC
+      - Older iOS:   "DCIM/106APPLE"     → same result (strip leading DCIM/)
+
+    Always strip a leading "DCIM/" (or bare "DCIM") so we never produce a
+    doubled path like Media/DCIM/DCIM/106APPLE/….
+    """
+    directory = directory.lstrip("/")
+    if directory.upper() == "DCIM":
+        directory = ""
+    elif directory.upper().startswith("DCIM/"):
+        directory = directory[5:]
+    if directory:
+        return f"Media/DCIM/{directory}/{filename}"
+    return f"Media/DCIM/{filename}"
+
+
 def _apple_ts_to_iso(ts) -> Optional[str]:
     """Convert Apple CoreData timestamp (seconds since 2001-01-01) to ISO 8601."""
     if ts is None:
@@ -101,22 +122,68 @@ class PhotoExtractor:
         """
         Dynamically locate the junction table between ZGENERICALBUM and ZASSET.
         Returns (table_name, albums_col, assets_col) or (None, None, None).
-        iOS stores this as Z_<N>ASSETS where N is the album entity number.
+
+        Strategy 1 (preferred): look up the GenericAlbum entity number in
+        Z_PRIMARYKEY, then directly look for Z_<N>ASSETS (exact name).
+        Strategy 2 (fallback): scan all Z_*ASSETS tables for one that has
+        both an *ALBUMS and an *ASSETS column.
         """
         try:
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Z_%ASSETS'"
-            )
-            tables = [row[0] for row in cursor.fetchall()]
-            for table in tables:
+            # Strategy 1: CoreData-canonical approach via Z_PRIMARYKEY
+            pk_rows = conn.execute(
+                "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = 'GenericAlbum'"
+            ).fetchall()
+            for (ent_num,) in pk_rows:
+                table = f"Z_{ent_num}ASSETS"
+                try:
+                    pragma = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
+                    col_names = [col[1] for col in pragma]
+                    albums_col = next((c for c in col_names if c.endswith("ALBUMS")), None)
+                    assets_col = next((c for c in col_names if c.endswith("ASSETS")), None)
+                    if albums_col and assets_col:
+                        print(
+                            f"[photos] junction table found via Z_PRIMARYKEY: "
+                            f"{table} ({albums_col}, {assets_col})",
+                            file=sys.stderr, flush=True,
+                        )
+                        return table, albums_col, assets_col
+                except Exception:
+                    pass
+        except Exception:
+            pass  # Z_PRIMARYKEY may not exist on some iOS versions
+
+        # Strategy 2: pattern scan — use exact regex-like match to avoid the
+        # SQLite LIKE '_' wildcard ambiguity.  Collect all tables, then filter
+        # in Python.
+        try:
+            all_tables = [
+                row[0] for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            ]
+            import re as _re
+            for table in all_tables:
+                if not _re.match(r"^Z_\d+ASSETS$", table):
+                    continue
                 pragma = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
                 col_names = [col[1] for col in pragma]
                 albums_col = next((c for c in col_names if c.endswith("ALBUMS")), None)
                 assets_col = next((c for c in col_names if c.endswith("ASSETS")), None)
                 if albums_col and assets_col:
+                    print(
+                        f"[photos] junction table found via pattern scan: "
+                        f"{table} ({albums_col}, {assets_col})",
+                        file=sys.stderr, flush=True,
+                    )
                     return table, albums_col, assets_col
-        except Exception:
-            pass
+            print(
+                f"[photos] _find_album_junction: no junction table found. "
+                f"Tables: {[t for t in all_tables if 'ASSET' in t.upper()]}",
+                file=sys.stderr, flush=True,
+            )
+        except Exception as e:
+            print(f"[photos] _find_album_junction error: {e}", file=sys.stderr, flush=True)
+
         return None, None, None
 
     def _asset_row_to_dict(self, row, album_ids: list, file_hash: str) -> dict:
@@ -232,11 +299,18 @@ class PhotoExtractor:
                 result = self._list_photos_from_db(backup, conn, offset, limit, album_id)
                 conn.close()
                 return result
-            except Exception:
+            except Exception as e:
+                print(
+                    f"[photos] _list_photos_from_db raised exception (falling back to DCIM scan): {e}",
+                    file=sys.stderr, flush=True,
+                )
+                import traceback
+                traceback.print_exc(file=sys.stderr)
                 try:
                     conn.close()
                 except Exception:
                     pass
+        print("[photos] list_photos: using DCIM fallback (no album filter)", file=sys.stderr, flush=True)
         return self._list_photos_from_dcim(backup, offset, limit)
 
     def _list_photos_from_db(self, backup, conn: sqlite3.Connection,
@@ -245,53 +319,100 @@ class PhotoExtractor:
         """Query Photos.sqlite for a page of assets."""
         junc_table, albums_col, assets_col = self._find_album_junction(conn)
 
-        asset_cols = (
-            "a.ZUUID, a.ZDIRECTORY, a.ZFILENAME, a.ZKIND, "
-            "a.ZDATECREATED, a.ZDATEMODIFIED, "
-            "a.ZWIDTH, a.ZHEIGHT, a.ZDURATION, "
-            "a.ZFAVORITE, a.ZHIDDEN, a.ZHASADJUSTMENTS, "
-            "a.ZBURSTUUID, a.ZLATITUDE, a.ZLONGITUDE, a.Z_PK"
-        )
+        # Introspect which columns actually exist in ZASSET on this iOS version.
+        # Older versions are missing ZDATEMODIFIED, ZTRASHEDSTATE, etc.
+        try:
+            zasset_cols = {
+                col[1] for col in conn.execute("PRAGMA table_info('ZASSET')").fetchall()
+            }
+        except Exception:
+            zasset_cols = set()
+
+        def col_or_null(name: str) -> str:
+            """Return 'a.NAME' if the column exists, else 'NULL AS NAME'."""
+            return f"a.{name}" if name in zasset_cols else f"NULL AS {name}"
+
+        # Build SELECT list — Z_PK is always required; everything else is optional.
+        asset_cols = ", ".join([
+            col_or_null("ZUUID"),
+            col_or_null("ZDIRECTORY"),
+            col_or_null("ZFILENAME"),
+            col_or_null("ZKIND"),
+            col_or_null("ZDATECREATED"),
+            col_or_null("ZDATEMODIFIED"),
+            col_or_null("ZWIDTH"),
+            col_or_null("ZHEIGHT"),
+            col_or_null("ZDURATION"),
+            col_or_null("ZFAVORITE"),
+            col_or_null("ZHIDDEN"),
+            col_or_null("ZHASADJUSTMENTS"),
+            col_or_null("ZBURSTUUID"),
+            col_or_null("ZLATITUDE"),
+            col_or_null("ZLONGITUDE"),
+            "a.Z_PK",
+        ])
+
+        # Trashed-state filter (omit entirely if column absent)
+        has_trashed = "ZTRASHEDSTATE" in zasset_cols
+        has_date = "ZDATECREATED" in zasset_cols
 
         # Build query based on album filter
+        if album_id and album_id != "__all__":
+            if not junc_table:
+                print(
+                    f"[photos] list_photos album_id={album_id!r} but junction table not found — "
+                    "returning all photos",
+                    file=sys.stderr, flush=True,
+                )
+            else:
+                print(
+                    f"[photos] list_photos filtering by album_id={album_id!r} "
+                    f"via {junc_table}({albums_col}, {assets_col})",
+                    file=sys.stderr, flush=True,
+                )
+
         if album_id and album_id != "__all__" and junc_table and albums_col and assets_col:
-            where_trashed = "AND a.ZTRASHEDSTATE = 0"
+            where_parts = [f"j.{albums_col} = ?"]
+            if has_trashed:
+                where_parts.append("a.ZTRASHEDSTATE = 0")
+            where_clause = " AND ".join(where_parts)
+            order_clause = "a.ZDATECREATED DESC" if has_date else "a.Z_PK DESC"
             query = (
                 f"SELECT {asset_cols} FROM ZASSET a "
                 f"INNER JOIN '{junc_table}' j ON j.{assets_col} = a.Z_PK "
-                f"WHERE j.{albums_col} = ? {where_trashed} "
-                f"ORDER BY a.ZDATECREATED DESC LIMIT ? OFFSET ?"
+                f"WHERE {where_clause} "
+                f"ORDER BY {order_clause} LIMIT ? OFFSET ?"
             )
             count_query = (
                 f"SELECT COUNT(*) FROM ZASSET a "
                 f"INNER JOIN '{junc_table}' j ON j.{assets_col} = a.Z_PK "
-                f"WHERE j.{albums_col} = ? {where_trashed}"
+                f"WHERE {where_clause}"
             )
             params = [int(album_id), limit, offset]
             count_params = [int(album_id)]
         else:
+            where_clause = "a.ZTRASHEDSTATE = 0" if has_trashed else "1=1"
+            order_clause = "a.ZDATECREATED DESC" if has_date else "a.Z_PK DESC"
             query = (
                 f"SELECT {asset_cols} FROM ZASSET a "
-                f"WHERE a.ZTRASHEDSTATE = 0 "
-                f"ORDER BY a.ZDATECREATED DESC LIMIT ? OFFSET ?"
+                f"WHERE {where_clause} "
+                f"ORDER BY {order_clause} LIMIT ? OFFSET ?"
             )
-            count_query = "SELECT COUNT(*) FROM ZASSET WHERE ZTRASHEDSTATE = 0"
+            count_query = (
+                f"SELECT COUNT(*) FROM ZASSET"
+                + (" WHERE ZTRASHEDSTATE = 0" if has_trashed else "")
+            )
             params = [limit, offset]
             count_params = []
 
-        # Try query; retry without ZTRASHEDSTATE if column missing (older iOS)
-        try:
-            rows = conn.execute(query, params).fetchall()
-            total = conn.execute(count_query, count_params).fetchone()[0]
-        except sqlite3.OperationalError:
-            query = query.replace("a.ZTRASHEDSTATE = 0 AND ", "").replace(
-                "WHERE a.ZTRASHEDSTATE = 0 ", "WHERE 1=1 "
-            )
-            count_query = count_query.replace(
-                " WHERE a.ZTRASHEDSTATE = 0", ""
-            ).replace("WHERE ZTRASHEDSTATE = 0", "")
-            rows = conn.execute(query, params).fetchall()
-            total = conn.execute(count_query, count_params).fetchone()[0]
+        rows = conn.execute(query, params).fetchall()
+        total = conn.execute(count_query, count_params).fetchone()[0]
+
+        print(
+            f"[photos] _list_photos_from_db album_id={album_id!r} → "
+            f"rows={len(rows)} total={total} offset={offset}",
+            file=sys.stderr, flush=True,
+        )
 
         # Build asset PK → album IDs map for this page
         asset_pks = [row["Z_PK"] for row in rows]
@@ -316,10 +437,7 @@ class PhotoExtractor:
         for row in rows:
             directory = row["ZDIRECTORY"] or ""
             filename = row["ZFILENAME"] or ""
-            if directory:
-                dcim_path = f"Media/DCIM/{directory}/{filename}"
-            else:
-                dcim_path = f"Media/DCIM/{filename}"
+            dcim_path = _build_dcim_path(directory, filename)
 
             if backup.encrypted:
                 # Manifest.db is encrypted — cannot look up hash directly.
@@ -393,13 +511,26 @@ class PhotoExtractor:
         try:
             junc_table, albums_col, assets_col = self._find_album_junction(conn)
 
+            zasset_cols = {
+                col[1] for col in conn.execute("PRAGMA table_info('ZASSET')").fetchall()
+            }
+
+            def _col_or_null(name: str) -> str:
+                return f"a.{name}" if name in zasset_cols else f"NULL AS {name}"
+
+            meta_cols = ", ".join([
+                _col_or_null("ZUUID"), _col_or_null("ZDIRECTORY"),
+                _col_or_null("ZFILENAME"), _col_or_null("ZKIND"),
+                _col_or_null("ZDATECREATED"), _col_or_null("ZDATEMODIFIED"),
+                _col_or_null("ZWIDTH"), _col_or_null("ZHEIGHT"),
+                _col_or_null("ZDURATION"), _col_or_null("ZFAVORITE"),
+                _col_or_null("ZHIDDEN"), _col_or_null("ZHASADJUSTMENTS"),
+                _col_or_null("ZBURSTUUID"), _col_or_null("ZLATITUDE"),
+                _col_or_null("ZLONGITUDE"), "a.Z_PK",
+            ])
+
             row = conn.execute(
-                "SELECT a.ZUUID, a.ZDIRECTORY, a.ZFILENAME, a.ZKIND, "
-                "a.ZDATECREATED, a.ZDATEMODIFIED, "
-                "a.ZWIDTH, a.ZHEIGHT, a.ZDURATION, "
-                "a.ZFAVORITE, a.ZHIDDEN, a.ZHASADJUSTMENTS, "
-                "a.ZBURSTUUID, a.ZLATITUDE, a.ZLONGITUDE, a.Z_PK "
-                "FROM ZASSET a WHERE a.ZUUID = ?",
+                f"SELECT {meta_cols} FROM ZASSET a WHERE a.ZUUID = ?",
                 (asset_uuid,)
             ).fetchone()
 
@@ -431,10 +562,7 @@ class PhotoExtractor:
 
             directory = row["ZDIRECTORY"] or ""
             filename = row["ZFILENAME"] or ""
-            dcim_path = (
-                f"Media/DCIM/{directory}/{filename}" if directory
-                else f"Media/DCIM/{filename}"
-            )
+            dcim_path = _build_dcim_path(directory, filename)
             if backup.encrypted:
                 file_hash = f"dcim:{dcim_path}"
             else:

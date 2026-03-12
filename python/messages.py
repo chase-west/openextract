@@ -266,6 +266,37 @@ def apple_date_to_iso(apple_timestamp) -> Optional[str]:
         return None
 
 
+def iso_to_apple_date(iso_str: str, nanoseconds: bool = False) -> Optional[float]:
+    """Convert ISO 8601 string to Apple Cocoa epoch timestamp.
+
+    Pass nanoseconds=True when the target DB stores timestamps as nanoseconds
+    (iOS 14+), which is detected by sampling a row before calling this.
+    """
+    if not iso_str:
+        return None
+    try:
+        from datetime import timezone
+        # Accept date-only strings like "2023-01-01"
+        if len(iso_str) == 10:
+            iso_str += "T00:00:00"
+        dt = datetime.fromisoformat(iso_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        delta = dt - APPLE_EPOCH.replace(tzinfo=timezone.utc)
+        seconds = delta.total_seconds()
+        return seconds * 1_000_000_000 if nanoseconds else seconds
+    except (ValueError, TypeError):
+        return None
+
+
+def _db_uses_nanoseconds(conn) -> bool:
+    """Return True if the message table stores timestamps in nanoseconds (iOS 14+)."""
+    row = conn.execute("SELECT date FROM message WHERE date > 0 LIMIT 1").fetchone()
+    if row and row[0] is not None:
+        return float(row[0]) > NANOSECOND_THRESHOLD
+    return False
+
+
 class MessageExtractor:
     """Extracts messages and conversations from iOS sms.db."""
 
@@ -329,7 +360,9 @@ class MessageExtractor:
         return {"conversations": conversations}
 
     def get_messages(self, backup, chat_id: int, contacts: dict,
-                     offset: int = 0, limit: int = 100) -> dict:
+                     offset: int = 0, limit: int = 100,
+                     date_from: Optional[str] = None,
+                     date_to: Optional[str] = None) -> dict:
         """Get paginated messages from a conversation."""
         db_path = self._get_sms_db(backup)
         if not db_path:
@@ -373,15 +406,29 @@ class MessageExtractor:
             if has_share_direction:   select_parts.append('m.share_direction')
             if has_uncanonicalized:   select_parts.append('h.uncanonicalized_id')
 
+            date_clauses = []
+            date_params: list = [chat_id]
+            if date_from or date_to:
+                ns = _db_uses_nanoseconds(conn)
+                apple_from = iso_to_apple_date(date_from, nanoseconds=ns) if date_from else None
+                apple_to = iso_to_apple_date(date_to, nanoseconds=ns) if date_to else None
+                if apple_from is not None:
+                    date_clauses.append("m.date >= ?")
+                    date_params.append(apple_from)
+                if apple_to is not None:
+                    date_clauses.append("m.date <= ?")
+                    date_params.append(apple_to)
+            where_extra = (" AND " + " AND ".join(date_clauses)) if date_clauses else ""
+
             rows = conn.execute(f"""
                 SELECT {', '.join(select_parts)}
                 FROM message m
                 LEFT JOIN handle h ON h.ROWID = m.handle_id
                 INNER JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
-                WHERE cmj.chat_id = ?
+                WHERE cmj.chat_id = ?{where_extra}
                 ORDER BY m.date DESC
                 LIMIT ? OFFSET ?
-            """, (chat_id, limit, offset)).fetchall()
+            """, (*date_params, limit, offset)).fetchall()
 
             # Reverse so messages render top-to-bottom in chronological order
             rows = list(rows)[::-1]
@@ -493,10 +540,12 @@ class MessageExtractor:
 
                 messages.append(msg)
 
-            # Get total count
+            # Get total count (respects date filters)
             total = conn.execute(
-                "SELECT COUNT(*) FROM chat_message_join WHERE chat_id = ?",
-                (chat_id,)
+                f"""SELECT COUNT(*) FROM message m
+                    INNER JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+                    WHERE cmj.chat_id = ?{where_extra}""",
+                tuple(date_params)
             ).fetchone()[0]
 
         finally:
@@ -611,8 +660,11 @@ class MessageExtractor:
             conn.close()
 
     def search_messages(self, backup, query: str, contacts: dict,
-                        chat_id: Optional[int] = None) -> dict:
-        """Search messages by text content."""
+                        chat_id: Optional[int] = None,
+                        date_from: Optional[str] = None,
+                        date_to: Optional[str] = None,
+                        limit: int = 500) -> dict:
+        """Search messages by text content, optionally filtered by chat and date range."""
         db_path = self._get_sms_db(backup)
         if not db_path:
             return {"results": []}
@@ -635,13 +687,24 @@ class MessageExtractor:
                 INNER JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
                 WHERE m.text LIKE ?
             """
-            params = [f"%{query}%"]
+            params: list = [f"%{query}%"]
 
             if chat_id:
                 sql += " AND cmj.chat_id = ?"
                 params.append(chat_id)
 
-            sql += " ORDER BY m.date DESC LIMIT 50"
+            if date_from or date_to:
+                ns = _db_uses_nanoseconds(conn)
+                apple_from = iso_to_apple_date(date_from, nanoseconds=ns) if date_from else None
+                apple_to = iso_to_apple_date(date_to, nanoseconds=ns) if date_to else None
+                if apple_from is not None:
+                    sql += " AND m.date >= ?"
+                    params.append(apple_from)
+                if apple_to is not None:
+                    sql += " AND m.date <= ?"
+                    params.append(apple_to)
+
+            sql += f" ORDER BY m.date ASC LIMIT {int(limit)}"
 
             rows = conn.execute(sql, params).fetchall()
             for row in rows:
@@ -660,17 +723,31 @@ class MessageExtractor:
         return {"results": results, "query": query}
 
     def export_conversation(self, backup, chat_id: int, contacts: dict,
-                            fmt: str, output_dir: str) -> dict:
-        """Export a conversation to the specified format."""
-        # Get all messages (no pagination for export)
-        all_messages = []
-        offset = 0
-        while True:
-            batch = self.get_messages(backup, chat_id, contacts, offset, 500)
-            all_messages.extend(batch["messages"])
-            if offset + 500 >= batch["total"]:
-                break
-            offset += 500
+                            fmt: str, output_dir: str,
+                            date_from: Optional[str] = None,
+                            date_to: Optional[str] = None,
+                            query: Optional[str] = None) -> dict:
+        """Export a conversation to the specified format, with optional date/search filters."""
+        if query:
+            # Search-filtered export — fetch matching messages directly
+            result = self.search_messages(
+                backup, query, contacts, chat_id,
+                date_from=date_from, date_to=date_to, limit=100000
+            )
+            all_messages = result["results"]
+        else:
+            # Date-range or full export via paginated get_messages
+            all_messages = []
+            offset = 0
+            while True:
+                batch = self.get_messages(
+                    backup, chat_id, contacts, offset, 500,
+                    date_from=date_from, date_to=date_to
+                )
+                all_messages.extend(batch["messages"])
+                if offset + 500 >= batch["total"]:
+                    break
+                offset += 500
 
         if fmt == "txt":
             return self._export_txt(all_messages, chat_id, output_dir)
@@ -681,14 +758,44 @@ class MessageExtractor:
         else:
             return {"error": f"Unsupported format: {fmt}"}
 
+    def _attachment_label(self, msg) -> str:
+        """Return a clean text label for a message's attachments."""
+        attachments = msg.get("attachments") or []
+        if not attachments:
+            return "[Attachment]"
+        parts = []
+        for a in attachments:
+            name = a.get("transfer_name") or a.get("filename") or ""
+            mime = a.get("mime_type") or ""
+            if mime.startswith("image/"):
+                kind = "Image"
+            elif mime.startswith("video/"):
+                kind = "Video"
+            elif mime.startswith("audio/"):
+                kind = "Audio"
+            else:
+                kind = "File"
+            label = f"[{kind}: {name}]" if name else f"[{kind}]"
+            parts.append(label)
+        return " ".join(parts)
+
+    def _message_text(self, msg) -> str:
+        """Return the display text for a message, replacing binary attachment data with labels."""
+        if msg.get("has_attachments"):
+            label = self._attachment_label(msg)
+            # Append any real accompanying text (e.g. a caption sent with an image)
+            text = (msg.get("text") or "").strip()
+            return f"{text} {label}".strip() if text else label
+        return msg.get("text") or ""
+
     def _export_txt(self, messages, chat_id, output_dir):
         filename = f"conversation_{chat_id}.txt"
         filepath = os.path.join(output_dir, filename)
-        with open(filepath, "w", encoding="utf-8") as f:
+        with open(filepath, "w", encoding="utf-8-sig") as f:
             for msg in messages:
                 date = msg["date"] or "Unknown date"
                 sender = msg["sender"]
-                text = msg["text"] or "[Attachment]"
+                text = self._message_text(msg) or "[No content]"
                 f.write(f"[{date}] {sender}: {text}\n")
         return {"file": filepath, "message_count": len(messages)}
 
@@ -696,12 +803,12 @@ class MessageExtractor:
         import csv
         filename = f"conversation_{chat_id}.csv"
         filepath = os.path.join(output_dir, filename)
-        with open(filepath, "w", newline="", encoding="utf-8") as f:
+        with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f)
             writer.writerow(["Date", "Sender", "Text", "Is From Me", "Has Attachments"])
             for msg in messages:
                 writer.writerow([
-                    msg["date"], msg["sender"], msg["text"],
+                    msg["date"], msg["sender"], self._message_text(msg),
                     msg["is_from_me"], msg["has_attachments"]
                 ])
         return {"file": filepath, "message_count": len(messages)}

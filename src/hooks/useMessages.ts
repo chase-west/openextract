@@ -62,14 +62,20 @@ export function useMessages(udid: string | undefined) {
     }
   }, [udid]);
 
-  const loadMessages = useCallback(async (chatId: number, offset = 0, limit = 100) => {
+  const loadMessages = useCallback(async (
+    chatId: number,
+    offset = 0,
+    limit = 100,
+    dateFrom?: string,
+    dateTo?: string
+  ) => {
     if (!udid) return;
     setLoading(true);
     setActiveChat(chatId);
     try {
       const result = await sidecarCall<{ messages: Message[]; total: number }>(
         'get_messages',
-        { udid, chat_id: chatId, offset, limit }
+        { udid, chat_id: chatId, offset, limit, date_from: dateFrom, date_to: dateTo }
       );
       if (offset === 0) {
         setMessages(result.messages);
@@ -82,13 +88,40 @@ export function useMessages(udid: string | undefined) {
     }
   }, [udid]);
 
-  const searchMessages = useCallback(async (query: string, chatId?: number) => {
+  const searchMessages = useCallback(async (
+    query: string,
+    chatId?: number,
+    dateFrom?: string,
+    dateTo?: string
+  ) => {
     if (!udid) return [];
-    const result = await sidecarCall<{ results: Message[] }>(
-      'search_messages',
-      { udid, query, chat_id: chatId }
+    setLoading(true);
+    try {
+      const result = await sidecarCall<{ results: Message[] }>(
+        'search_messages',
+        { udid, query, chat_id: chatId, date_from: dateFrom, date_to: dateTo }
+      );
+      setMessages(result.results);
+      setTotalMessages(result.results.length);
+      return result.results;
+    } finally {
+      setLoading(false);
+    }
+  }, [udid]);
+
+  const exportConversation = useCallback(async (
+    chatId: number,
+    format: 'txt' | 'csv' | 'html',
+    outputDir: string,
+    dateFrom?: string,
+    dateTo?: string,
+    query?: string
+  ) => {
+    if (!udid) return null;
+    return sidecarCall<{ file: string; message_count: number }>(
+      'export_conversation',
+      { udid, chat_id: chatId, format, output_dir: outputDir, date_from: dateFrom, date_to: dateTo, query }
     );
-    return result.results;
   }, [udid]);
 
   return {
@@ -100,6 +133,7 @@ export function useMessages(udid: string | undefined) {
     loadConversations,
     loadMessages,
     searchMessages,
+    exportConversation,
     setActiveChat,
   };
 }

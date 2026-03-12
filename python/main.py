@@ -83,9 +83,13 @@ class SidecarServer:
         chat_id = params["chat_id"]
         offset = params.get("offset", 0)
         limit = params.get("limit", 100)
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
         backup = self.backup_manager.get_open_backup(udid)
         contacts = self.contact_resolver.load_contacts(backup)
-        return self.message_extractor.get_messages(backup, chat_id, contacts, offset, limit)
+        return self.message_extractor.get_messages(
+            backup, chat_id, contacts, offset, limit, date_from, date_to
+        )
 
     def get_attachment(self, params):
         udid = params["udid"]
@@ -97,9 +101,13 @@ class SidecarServer:
         udid = params["udid"]
         query = params["query"]
         chat_id = params.get("chat_id")
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
         backup = self.backup_manager.get_open_backup(udid)
         contacts = self.contact_resolver.load_contacts(backup)
-        return self.message_extractor.search_messages(backup, query, contacts, chat_id)
+        return self.message_extractor.search_messages(
+            backup, query, contacts, chat_id, date_from=date_from, date_to=date_to
+        )
 
     def list_albums(self, params):
         udid = params["udid"]
@@ -166,12 +174,16 @@ class SidecarServer:
     def export_conversation(self, params):
         udid = params["udid"]
         chat_id = params["chat_id"]
-        fmt = params.get("format", "pdf")
+        fmt = params.get("format", "txt")
         output_dir = params.get("output_dir", ".")
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
+        query = params.get("query")
         backup = self.backup_manager.get_open_backup(udid)
         contacts = self.contact_resolver.load_contacts(backup)
         return self.message_extractor.export_conversation(
-            backup, chat_id, contacts, fmt, output_dir
+            backup, chat_id, contacts, fmt, output_dir,
+            date_from=date_from, date_to=date_to, query=query
         )
 
     def export_photos(self, params):

@@ -101,22 +101,68 @@ class PhotoExtractor:
         """
         Dynamically locate the junction table between ZGENERICALBUM and ZASSET.
         Returns (table_name, albums_col, assets_col) or (None, None, None).
-        iOS stores this as Z_<N>ASSETS where N is the album entity number.
+
+        Strategy 1 (preferred): look up the GenericAlbum entity number in
+        Z_PRIMARYKEY, then directly look for Z_<N>ASSETS (exact name).
+        Strategy 2 (fallback): scan all Z_*ASSETS tables for one that has
+        both an *ALBUMS and an *ASSETS column.
         """
         try:
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Z_%ASSETS'"
-            )
-            tables = [row[0] for row in cursor.fetchall()]
-            for table in tables:
+            # Strategy 1: CoreData-canonical approach via Z_PRIMARYKEY
+            pk_rows = conn.execute(
+                "SELECT Z_ENT FROM Z_PRIMARYKEY WHERE Z_NAME = 'GenericAlbum'"
+            ).fetchall()
+            for (ent_num,) in pk_rows:
+                table = f"Z_{ent_num}ASSETS"
+                try:
+                    pragma = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
+                    col_names = [col[1] for col in pragma]
+                    albums_col = next((c for c in col_names if c.endswith("ALBUMS")), None)
+                    assets_col = next((c for c in col_names if c.endswith("ASSETS")), None)
+                    if albums_col and assets_col:
+                        print(
+                            f"[photos] junction table found via Z_PRIMARYKEY: "
+                            f"{table} ({albums_col}, {assets_col})",
+                            file=sys.stderr, flush=True,
+                        )
+                        return table, albums_col, assets_col
+                except Exception:
+                    pass
+        except Exception:
+            pass  # Z_PRIMARYKEY may not exist on some iOS versions
+
+        # Strategy 2: pattern scan — use exact regex-like match to avoid the
+        # SQLite LIKE '_' wildcard ambiguity.  Collect all tables, then filter
+        # in Python.
+        try:
+            all_tables = [
+                row[0] for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            ]
+            import re as _re
+            for table in all_tables:
+                if not _re.match(r"^Z_\d+ASSETS$", table):
+                    continue
                 pragma = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
                 col_names = [col[1] for col in pragma]
                 albums_col = next((c for c in col_names if c.endswith("ALBUMS")), None)
                 assets_col = next((c for c in col_names if c.endswith("ASSETS")), None)
                 if albums_col and assets_col:
+                    print(
+                        f"[photos] junction table found via pattern scan: "
+                        f"{table} ({albums_col}, {assets_col})",
+                        file=sys.stderr, flush=True,
+                    )
                     return table, albums_col, assets_col
-        except Exception:
-            pass
+            print(
+                f"[photos] _find_album_junction: no junction table found. "
+                f"Tables: {[t for t in all_tables if 'ASSET' in t.upper()]}",
+                file=sys.stderr, flush=True,
+            )
+        except Exception as e:
+            print(f"[photos] _find_album_junction error: {e}", file=sys.stderr, flush=True)
+
         return None, None, None
 
     def _asset_row_to_dict(self, row, album_ids: list, file_hash: str) -> dict:
@@ -254,6 +300,20 @@ class PhotoExtractor:
         )
 
         # Build query based on album filter
+        if album_id and album_id != "__all__":
+            if not junc_table:
+                print(
+                    f"[photos] list_photos album_id={album_id!r} but junction table not found — "
+                    "returning all photos",
+                    file=sys.stderr, flush=True,
+                )
+            else:
+                print(
+                    f"[photos] list_photos filtering by album_id={album_id!r} "
+                    f"via {junc_table}({albums_col}, {assets_col})",
+                    file=sys.stderr, flush=True,
+                )
+
         if album_id and album_id != "__all__" and junc_table and albums_col and assets_col:
             where_trashed = "AND a.ZTRASHEDSTATE = 0"
             query = (
@@ -286,10 +346,12 @@ class PhotoExtractor:
         except sqlite3.OperationalError:
             query = query.replace("a.ZTRASHEDSTATE = 0 AND ", "").replace(
                 "WHERE a.ZTRASHEDSTATE = 0 ", "WHERE 1=1 "
-            )
+            ).replace(" AND a.ZTRASHEDSTATE = 0", "")
             count_query = count_query.replace(
                 " WHERE a.ZTRASHEDSTATE = 0", ""
-            ).replace("WHERE ZTRASHEDSTATE = 0", "")
+            ).replace("WHERE ZTRASHEDSTATE = 0", "").replace(
+                " AND a.ZTRASHEDSTATE = 0", ""
+            )
             rows = conn.execute(query, params).fetchall()
             total = conn.execute(count_query, count_params).fetchone()[0]
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Paperclip, Loader2 } from 'lucide-react';
 import { sidecarCall } from '../lib/ipc';
 import { Attachment } from '../hooks/useMessages';
 
@@ -38,19 +39,24 @@ export default function AttachmentViewer({ udid, attachment }: Props) {
 
     if (!attachment.mime_type?.startsWith('image/')) {
         return (
-            <div className="flex items-center space-x-2 text-sm italic opacity-75">
-                <span>📎</span>
+            <div className="flex items-center space-x-2 text-body italic text-text-secondary">
+                <Paperclip className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>{attachment.transfer_name || attachment.filename || 'Attachment'}</span>
             </div>
         );
     }
 
     if (loading) {
-        return <div className="text-sm italic opacity-50">Loading image...</div>;
+        return (
+            <div className="flex items-center gap-1.5 text-body italic text-text-tertiary">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Loading image...
+            </div>
+        );
     }
 
     if (error) {
-        return <div className="text-sm text-red-400 italic">Error: {error}</div>;
+        return <div className="text-body text-red-400 italic">Error: {error}</div>;
     }
 
     if (data) {
@@ -59,7 +65,8 @@ export default function AttachmentViewer({ udid, attachment }: Props) {
                 <img
                     src={data}
                     alt={attachment.transfer_name || 'Attachment'}
-                    className="rounded-lg object-contain max-h-64 cursor-pointer border border-gray-200"
+                    className="rounded-lg object-contain max-h-64 cursor-pointer"
+                    style={{ border: '0.5px solid var(--border-default)' }}
                     onClick={(e) => {
                         // Prevent triggering the bubble's click event for showing timestamp
                         e.stopPropagation();
@@ -70,5 +77,5 @@ export default function AttachmentViewer({ udid, attachment }: Props) {
         );
     }
 
-    return <div className="text-sm italic opacity-50">Unknown attachment</div>;
+    return <div className="text-body italic text-text-tertiary">Unknown attachment</div>;
 }

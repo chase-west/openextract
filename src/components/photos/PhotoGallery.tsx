@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, Download, Loader2 } from 'lucide-react';
 import { BackupInfo } from '../../hooks/useBackup';
 import { usePhotos } from '../../hooks/usePhotos';
 import { PhotoAlbum } from '../../types';
@@ -54,10 +55,10 @@ export default function PhotoGallery({ backup }: Props) {
   }, [selectedAlbum, selectAlbum]);
 
   return (
-    <div className="flex h-full bg-gray-900 text-gray-100 overflow-hidden">
+    <div className="flex h-full bg-gray-900 text-text-primary overflow-hidden">
       {/* Album sidebar */}
-      <aside className="w-52 flex-shrink-0 border-r border-gray-800 flex flex-col overflow-hidden">
-        <p className="text-[11px] uppercase tracking-wider text-gray-600 px-3 pt-3 pb-1 flex-shrink-0">
+      <aside className="w-52 flex-shrink-0 flex flex-col overflow-hidden" style={{ borderRight: '0.5px solid var(--border-default)' }}>
+        <p className="text-caption uppercase tracking-wider text-text-tertiary px-3 pt-3 pb-1 flex-shrink-0">
           Albums
         </p>
         <div className="flex-1 overflow-y-auto py-1">
@@ -67,14 +68,14 @@ export default function PhotoGallery({ backup }: Props) {
               <button
                 key={album.id}
                 onClick={() => handleAlbumClick(album)}
-                className={`w-full text-left px-3 py-1.5 text-sm flex items-center justify-between gap-2 transition-colors ${
+                className={`w-full text-left px-3 py-1.5 text-body flex items-center justify-between gap-2 transition-colors focus:outline-none focus:shadow-focus ${
                   active
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-800'
+                    ? 'bg-accent text-white'
+                    : 'text-text-secondary hover:bg-gray-800'
                 }`}
               >
                 <span className="truncate flex-1">{album.title}</span>
-                <span className={`text-[11px] flex-shrink-0 ${active ? 'text-blue-200' : 'text-gray-600'}`}>
+                <span className={`text-caption flex-shrink-0 ${active ? 'text-white/70' : 'text-text-tertiary'}`}>
                   {album.asset_count.toLocaleString()}
                 </span>
               </button>
@@ -86,38 +87,44 @@ export default function PhotoGallery({ backup }: Props) {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800 flex-shrink-0 bg-gray-900">
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search filename…"
-            className="bg-gray-800 text-gray-200 text-sm px-3 py-1.5 rounded border border-gray-700 w-44 focus:outline-none focus:border-blue-500 placeholder-gray-600"
-          />
+        <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-gray-900" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search filename..."
+              className="bg-gray-800 text-text-primary text-body pl-8 pr-3 py-1.5 rounded-lg w-44 focus:outline-none focus:shadow-focus placeholder:text-text-tertiary"
+              style={{ border: '0.5px solid var(--border-default)' }}
+            />
+          </div>
           <select
             value={kindFilter}
             onChange={e => setKindFilter(e.target.value)}
-            className="bg-gray-800 text-gray-200 text-sm px-2 py-1.5 rounded border border-gray-700 focus:outline-none"
+            className="bg-gray-800 text-text-primary text-body px-2 py-1.5 rounded-lg focus:outline-none focus:shadow-focus"
+            style={{ border: '0.5px solid var(--border-default)' }}
           >
             {KIND_OPTIONS.map(o => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <span className="text-xs text-gray-600 ml-1">
+          <span className="text-caption text-text-tertiary ml-1">
             {filteredPhotos.length.toLocaleString()}
             {total > photos.length && ` of ${total.toLocaleString()}`}
           </span>
           <button
             onClick={() => setShowExport(true)}
-            className="ml-auto bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 py-1.5 rounded transition-colors"
+            className="ml-auto bg-accent hover:bg-accent-hover text-white text-body px-3 py-1.5 rounded-lg transition-colors focus:outline-none focus:shadow-focus inline-flex items-center gap-1.5"
           >
-            Export…
+            <Download className="w-3.5 h-3.5" />
+            Export
           </button>
         </div>
 
         {/* Error banner */}
         {error && (
-          <div className="mx-3 mt-2 px-3 py-2 bg-red-900/40 border border-red-800 rounded text-sm text-red-300 flex-shrink-0">
+          <div className="mx-3 mt-2 px-3 py-2 bg-red-900/40 rounded-lg text-body text-red-300 flex-shrink-0" style={{ border: '0.5px solid var(--border-danger)' }}>
             {error}
           </div>
         )}
@@ -125,13 +132,13 @@ export default function PhotoGallery({ backup }: Props) {
         {/* Photo grid */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-2">
           {loading && photos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-600">
-              <div className="w-8 h-8 border-2 border-gray-700 border-t-blue-500 rounded-full animate-spin mb-3" />
-              <p className="text-sm">Loading photos…</p>
+            <div className="flex flex-col items-center justify-center h-full text-text-tertiary">
+              <Loader2 className="w-8 h-8 animate-spin mb-3 text-accent" />
+              <p className="text-body">Loading photos...</p>
             </div>
           ) : filteredPhotos.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-600">
-              <p className="text-sm">{photos.length === 0 ? 'No photos in backup' : 'No results'}</p>
+            <div className="flex items-center justify-center h-full text-text-tertiary">
+              <p className="text-body">{photos.length === 0 ? 'No photos in backup' : 'No results'}</p>
             </div>
           ) : (
             <>
@@ -153,13 +160,13 @@ export default function PhotoGallery({ backup }: Props) {
               {/* Load more spinner */}
               {loadingMore && (
                 <div className="flex justify-center py-5">
-                  <div className="w-6 h-6 border-2 border-gray-700 border-t-blue-500 rounded-full animate-spin" />
+                  <Loader2 className="w-6 h-6 animate-spin text-accent" />
                 </div>
               )}
 
               {/* End-of-list indicator */}
               {!hasMore && filteredPhotos.length > 0 && (
-                <p className="text-center text-gray-700 text-xs py-4">
+                <p className="text-center text-text-tertiary text-caption py-4">
                   All {filteredPhotos.length.toLocaleString()} items loaded
                 </p>
               )}

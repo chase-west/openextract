@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Loader2, AlertTriangle, Inbox, Download, ChevronDown, ChevronUp, Phone } from 'lucide-react';
 import { BackupInfo } from '../../hooks/useBackup';
 import AmrPlayer from './AmrPlayer';
 
@@ -128,26 +129,38 @@ export default function VoicemailView({ backup }: Props) {
     }
 
     return (
-        <div className="flex flex-col h-full bg-white">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-800">Voicemails</h2>
+        <div className="flex flex-col h-full bg-base">
+            <div className="flex items-center justify-between p-4" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+                <h2 className="font-display text-title font-semibold text-text-primary">Voicemails</h2>
                 <button
                     onClick={handleBulkExport}
                     disabled={exporting || voicemails.length === 0}
-                    className="px-4 py-2 bg-blue-600 text-white rounded shadow text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    className="px-4 py-2 bg-accent text-white rounded-lg shadow-subtle text-body font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors duration-200 flex items-center gap-2"
                 >
+                    <Download className="w-4 h-4" />
                     {exporting ? 'Exporting...' : 'Bulk Export CSV & Audio'}
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-                {loading && <div className="text-center text-gray-500 py-10">Loading voicemails...</div>}
-                {error && <div className="text-center text-red-500 py-10">{error}</div>}
+            <div className="flex-1 overflow-y-auto p-4 bg-surface">
+                {loading && (
+                    <div className="flex items-center justify-center text-text-secondary py-10 gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin text-text-accent" />
+                        <span className="text-body">Loading voicemails...</span>
+                    </div>
+                )}
+                {error && (
+                    <div className="flex flex-col items-center text-apple-error py-10 gap-2">
+                        <AlertTriangle className="w-6 h-6" />
+                        <span className="text-body">{error}</span>
+                    </div>
+                )}
 
                 {!loading && voicemails.length === 0 && !error && (
-                    <div className="text-center text-gray-500 py-10">
-                        <p>No voicemails found in this backup.</p>
-                        <pre className="text-xs text-left overflow-auto mt-4 p-2 bg-gray-200">{debugInfo}</pre>
+                    <div className="text-center text-text-secondary py-10">
+                        <Inbox className="w-10 h-10 mx-auto mb-3 text-text-tertiary opacity-50" />
+                        <p className="text-body">No voicemails found in this backup.</p>
+                        <pre className="text-caption text-left overflow-auto mt-4 p-2 bg-elevated rounded-lg font-mono">{debugInfo}</pre>
                     </div>
                 )}
 
@@ -159,9 +172,10 @@ export default function VoicemailView({ backup }: Props) {
                         return (
                             <div
                                 key={vm.id}
-                                className={`bg-white rounded-lg shadow-sm border transition-all duration-200 overflow-hidden
-                  ${vm.is_read ? 'border-gray-200' : 'border-blue-200 bg-blue-50'}
-                  ${isExpanded ? 'shadow-md ring-1 ring-blue-500' : 'hover:shadow hover:border-blue-300'}`}
+                                className={`bg-base rounded-lg overflow-hidden transition-all duration-250
+                  ${vm.is_read ? '' : 'bg-accent-subtle'}
+                  ${isExpanded ? 'shadow-elevated' : 'shadow-card hover:shadow-elevated'}`}
+                                style={{ border: '0.5px solid var(--border-default)' }}
                             >
                                 {/* Header row, clickable */}
                                 <div
@@ -169,47 +183,55 @@ export default function VoicemailView({ backup }: Props) {
                                     onClick={() => expandVoicemail(vm.id)}
                                 >
                                     <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
-                                        <span className="font-semibold text-gray-900 text-lg">
+                                        <span className="font-semibold text-text-primary text-subhead flex items-center gap-2">
+                                            <Phone className="w-4 h-4 text-text-accent" />
                                             {vm.contact_name}
                                         </span>
                                         {vm.contact_name !== vm.phone_number && vm.phone_number && (
-                                            <span className="text-sm text-gray-500">{vm.phone_number}</span>
+                                            <span className="text-body text-text-secondary">{vm.phone_number}</span>
                                         )}
                                     </div>
 
-                                    <div className="flex items-center gap-4 text-sm text-gray-600 mt-2 sm:mt-0">
+                                    <div className="flex items-center gap-4 text-body text-text-secondary mt-2 sm:mt-0">
                                         <span className="tabular-nums">
                                             {vm.date_received ? new Date(vm.date_received).toLocaleString() : 'Unknown date'}
                                         </span>
-                                        <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-xs">
+                                        <span className="font-mono bg-elevated px-2 py-0.5 rounded text-caption">
                                             {formatDuration(vm.duration)}
                                         </span>
+                                        {isExpanded
+                                            ? <ChevronUp className="w-4 h-4 text-text-tertiary" />
+                                            : <ChevronDown className="w-4 h-4 text-text-tertiary" />
+                                        }
                                     </div>
                                 </div>
 
                                 {/* Expanded detail view */}
                                 {isExpanded && (
-                                    <div className="p-4 border-t border-gray-100 bg-gray-50/50 animate-in fade-in slide-in-from-top-2">
+                                    <div className="p-4 bg-surface animate-in fade-in slide-in-from-top-2" style={{ borderTop: '0.5px solid var(--border-subtle)' }}>
 
                                         {vm.transcript ? (
                                             <div className="mb-4">
-                                                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Transcript</h4>
-                                                <p className="text-gray-700 italic border-l-2 border-blue-400 pl-3 py-1">
+                                                <h4 className="text-caption font-semibold text-text-tertiary uppercase tracking-wider mb-2">Transcript</h4>
+                                                <p className="text-body text-text-secondary italic pl-3 py-1" style={{ borderLeft: '2px solid var(--accent)' }}>
                                                     "{vm.transcript}"
                                                 </p>
                                             </div>
                                         ) : (
-                                            <div className="mb-4 text-sm text-gray-400 italic">No transcript available</div>
+                                            <div className="mb-4 text-body text-text-tertiary italic">No transcript available</div>
                                         )}
 
-                                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-4 pt-4 border-t border-gray-200">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-4 pt-4" style={{ borderTop: '0.5px solid var(--border-subtle)' }}>
                                             <div className="flex-1 min-w-[200px] flex items-center">
                                                 {loadingAudio === vm.id ? (
-                                                    <div className="text-xs text-blue-600 animate-pulse">Loading audio...</div>
+                                                    <div className="text-caption text-text-accent animate-pulse flex items-center gap-1.5">
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                        Loading audio...
+                                                    </div>
                                                 ) : audioData ? (
                                                     <AmrPlayer base64Data={audioData.data} mimeType={audioData.mime_type} />
                                                 ) : (
-                                                    <div className="text-xs text-red-500 max-w-sm overflow-auto">
+                                                    <div className="text-caption text-apple-error max-w-sm overflow-auto">
                                                         {audioError ? `Error: ${audioError}` : 'Audio file not found'}
                                                     </div>
                                                 )}
@@ -221,8 +243,10 @@ export default function VoicemailView({ backup }: Props) {
                                                     if (audioData) handleExportSingle(vm, audioData);
                                                 }}
                                                 disabled={!audioData}
-                                                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded border border-gray-300 transition-colors disabled:opacity-50"
+                                                className="px-3 py-1.5 bg-elevated hover:bg-surface text-text-primary text-body font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 flex items-center gap-1.5"
+                                                style={{ border: '0.5px solid var(--border-default)' }}
                                             >
+                                                <Download className="w-3.5 h-3.5" />
                                                 Export Audio
                                             </button>
                                         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Smartphone, Lock, Loader2, FolderOpen } from 'lucide-react';
 import { selectFolder } from '../lib/ipc';
 import { formatDateTime } from '../lib/dates';
 import { BackupInfo } from '../hooks/useBackup';
@@ -56,29 +57,29 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
   };
 
   return (
-    <div className="flex items-center justify-center h-full p-8">
+    <div className="flex items-center justify-center h-full p-8 bg-base">
       <div className="max-w-2xl w-full">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-4">📱</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          <Smartphone size={40} strokeWidth={1.5} className="mx-auto mb-4 text-text-accent" />
+          <h2 className="text-title font-display font-semibold text-text-primary mb-2">
             Welcome to OpenExtract
           </h2>
-          <p className="text-gray-600">
+          <p className="text-body text-text-secondary">
             Select an iPhone backup to browse your messages, photos, voicemails, and more.
           </p>
         </div>
 
         {/* Error display */}
         {(error || openError) && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+          <div className="mb-4 p-3 rounded-lg text-body" style={{ background: 'rgba(255,59,48,0.08)', border: '0.5px solid rgba(255,59,48,0.2)', color: 'var(--error)' }}>
             {error || openError}
           </div>
         )}
 
-        {/* Password prompt modal */}
+        {/* Password prompt */}
         {pendingBackup && (
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm font-medium text-blue-800 mb-3">
+          <div className="mb-6 p-4 bg-accent-subtle rounded-lg" style={{ border: '0.5px solid var(--border-default)' }}>
+            <p className="text-body font-medium text-text-primary mb-3">
               This backup is encrypted. Enter your backup password:
             </p>
             <div className="flex gap-2">
@@ -89,12 +90,13 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
                   placeholder="Backup password"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-base text-body text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus"
+                  style={{ border: '0.5px solid var(--border-strong)' }}
                   autoFocus
                 />
                 <button
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-caption text-text-tertiary hover:text-text-secondary transition-colors"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -102,18 +104,18 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
               <button
                 onClick={handlePasswordSubmit}
                 disabled={!password || loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-accent text-white rounded-lg text-body font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
               >
                 {loading ? 'Decrypting...' : 'Unlock'}
               </button>
               <button
                 onClick={() => { setPendingBackup(null); setPassword(''); setPendingBackupDir(undefined); }}
-                className="px-3 py-2 text-gray-600 text-sm hover:text-gray-800"
+                className="px-3 py-2 text-text-secondary text-body hover:text-text-primary transition-colors"
               >
                 Cancel
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-caption text-text-tertiary mt-2">
               This is the password you set when enabling encrypted backups in iTunes/Finder.
             </p>
           </div>
@@ -122,15 +124,16 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
         {/* Backup list */}
         <div className="space-y-3">
           {loading && backups.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              Searching for backups...
+            <div className="flex flex-col items-center py-8 text-text-tertiary">
+              <Loader2 size={24} strokeWidth={1.5} className="animate-spin mb-2" />
+              <span className="text-body">Searching for backups...</span>
             </div>
           )}
 
           {!loading && backups.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <p className="mb-2">No backups found in default locations.</p>
-              <p className="text-sm">Try browsing to a backup folder manually.</p>
+            <div className="text-center py-8 text-text-tertiary">
+              <p className="text-body mb-1">No backups found in default locations.</p>
+              <p className="text-caption">Try browsing to a backup folder manually.</p>
             </div>
           )}
 
@@ -139,27 +142,33 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
               key={backup.backup_dir || backup.udid}
               onClick={() => handleOpen(backup)}
               disabled={loading}
-              className="w-full text-left p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-300 hover:shadow-sm transition-all disabled:opacity-50"
+              className="w-full text-left p-4 bg-surface rounded-lg hover:shadow-card transition-all duration-250 disabled:opacity-50"
+              style={{ border: '0.5px solid var(--border-default)' }}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--border-strong)'}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-default)'}
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-medium text-gray-900">
+                  <div className="font-display text-subhead font-semibold text-text-primary">
                     {backup.device_name}
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">
-                    iOS {backup.product_version} · {backup.product_type}
+                  <div className="text-caption text-text-secondary mt-1">
+                    iOS {backup.product_version} &middot; {backup.product_type}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-caption text-text-secondary">
                     Last backup: {formatDateTime(backup.last_backup)}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-gray-500">
+                  <div className="font-mono text-caption text-text-tertiary">
                     {backup.size_gb} GB
                   </div>
                   {backup.encrypted && (
-                    <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
-                      🔒 Encrypted
+                    <span
+                      className="inline-flex items-center gap-1 mt-1.5 text-caption font-medium px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(255,159,10,0.1)', color: '#c77c00', border: '0.5px solid rgba(255,159,10,0.25)' }}
+                    >
+                      <Lock size={10} strokeWidth={2} /> Encrypted
                     </span>
                   )}
                 </div>
@@ -172,8 +181,9 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
         <div className="mt-6 text-center">
           <button
             onClick={handleBrowse}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="inline-flex items-center gap-1.5 text-body text-text-accent hover:underline transition-colors"
           >
+            <FolderOpen size={14} strokeWidth={1.5} />
             Browse for backup folder...
           </button>
         </div>

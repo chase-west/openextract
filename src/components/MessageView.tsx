@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { Search, MessageSquare, Loader2 } from 'lucide-react';
 import { useMessages } from '../hooks/useMessages';
 import { formatRelative } from '../lib/dates';
 import { saveFolder } from '../lib/ipc';
@@ -8,7 +9,6 @@ interface Props {
   udid: string;
 }
 
-// Returns today / N-months-ago as YYYY-MM-DD strings (in local time)
 function datePreset(months: number | null): { from: string; to: string } {
   const to = new Date();
   const from = new Date();
@@ -23,10 +23,6 @@ function thisYearPreset(): { from: string; to: string } {
   return { from: `${year}-01-01`, to: `${year}-12-31` };
 }
 
-/**
- * Convert a YYYY-MM-DD date string to a UTC ISO string using local midnight.
- * This ensures "March 1" means March 1 in the user's timezone, not UTC midnight.
- */
 function localDateToISO(dateStr: string, endOfDay = false): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = endOfDay
@@ -48,16 +44,11 @@ export default function MessageView({ udid }: Props) {
     exportConversation,
   } = useMessages(udid);
 
-  // Conversation list search
   const [convSearch, setConvSearch] = useState('');
-
-  // In-conversation filters
   const [msgSearch, setMsgSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [filtersActive, setFiltersActive] = useState(false);
-
-  // Export
   const [exportFormat, setExportFormat] = useState<'txt' | 'csv' | 'html'>('txt');
   const [exporting, setExporting] = useState(false);
 
@@ -69,12 +60,10 @@ export default function MessageView({ udid }: Props) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Apply filters (debounced via a button or on Enter; date fields apply immediately)
   const applyFilters = useCallback((query: string, from: string, to: string) => {
     if (!activeChat) return;
     const hasQuery = query.trim().length > 0;
     const hasDate = from || to;
-    // Convert local date strings to UTC ISO so the backend compares in the user's timezone
     const utcFrom = from ? localDateToISO(from, false) : undefined;
     const utcTo = to ? localDateToISO(to, true) : undefined;
     if (hasQuery || hasDate) {
@@ -82,7 +71,6 @@ export default function MessageView({ udid }: Props) {
       if (hasQuery) {
         searchMessages(query.trim(), activeChat, utcFrom, utcTo);
       } else {
-        // Date-only filter: use loadMessages with date params
         loadMessages(activeChat, 0, 500, utcFrom, utcTo);
       }
     } else {
@@ -139,21 +127,28 @@ export default function MessageView({ udid }: Props) {
   const activeConversation = conversations.find((c) => c.chat_id === activeChat);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full bg-base">
       {/* Conversation list */}
-      <div className="w-80 border-r border-gray-200 flex flex-col bg-white flex-shrink-0">
-        <div className="p-3 border-b border-gray-100">
-          <input
-            type="text"
-            placeholder="Search conversations..."
-            value={convSearch}
-            onChange={(e) => setConvSearch(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      <div className="w-80 flex flex-col bg-surface flex-shrink-0" style={{ borderRight: '0.5px solid var(--border-default)' }}>
+        <div className="p-3" style={{ borderBottom: '0.5px solid var(--border-subtle)' }}>
+          <div className="relative">
+            <Search size={14} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={convSearch}
+              onChange={(e) => setConvSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-elevated text-body text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus placeholder:text-text-tertiary"
+              style={{ border: '0.5px solid var(--border-default)' }}
+            />
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading && conversations.length === 0 && (
-            <div className="p-4 text-center text-gray-500 text-sm">Loading conversations...</div>
+            <div className="flex items-center justify-center py-8 text-text-tertiary">
+              <Loader2 size={16} strokeWidth={1.5} className="animate-spin mr-2" />
+              <span className="text-body">Loading...</span>
+            </div>
           )}
           {filteredConversations.map((conv) => (
             <button
@@ -162,52 +157,59 @@ export default function MessageView({ udid }: Props) {
                 handleClearFilters();
                 loadMessages(conv.chat_id);
               }}
-              className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${
-                activeChat === conv.chat_id ? 'bg-blue-50' : ''
+              className={`w-full text-left px-4 py-2.5 transition-colors duration-200 ${
+                activeChat === conv.chat_id
+                  ? 'bg-accent-subtle'
+                  : 'hover:bg-sidebar-active'
               }`}
+              style={{
+                borderBottom: '0.5px solid var(--border-subtle)',
+                borderLeft: activeChat === conv.chat_id ? '2px solid var(--accent)' : '2px solid transparent',
+              }}
             >
               <div className="flex justify-between items-start">
-                <div className="font-medium text-sm text-gray-900 truncate flex-1">
+                <div className="text-body font-medium text-text-primary truncate flex-1">
                   {conv.display_name}
                   {conv.is_group && (
-                    <span className="ml-1 text-xs text-gray-400">👥</span>
+                    <span className="ml-1 text-caption text-text-tertiary">Group</span>
                   )}
                 </div>
-                <span className="text-xs text-gray-400 ml-2 flex-shrink-0">
+                <span className="text-caption text-text-tertiary ml-2 flex-shrink-0">
                   {formatRelative(conv.last_message_date)}
                 </span>
               </div>
-              <div className="text-xs text-gray-500 truncate mt-0.5">
+              <div className="text-caption text-text-secondary truncate mt-0.5">
                 {conv.last_message_preview || 'No messages'}
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">
-                {conv.message_count} messages · {conv.service}
+              <div className="text-caption text-text-tertiary mt-0.5">
+                {conv.message_count} messages
               </div>
             </button>
           ))}
         </div>
-        <div className="p-2 border-t border-gray-100 text-xs text-gray-400 text-center">
+        <div className="p-2 text-caption text-text-tertiary text-center" style={{ borderTop: '0.5px solid var(--border-subtle)' }}>
           {conversations.length} conversations
         </div>
       </div>
 
       {/* Message display */}
-      <div className="flex-1 flex flex-col bg-white min-w-0">
+      <div className="flex-1 flex flex-col bg-base min-w-0">
         {activeConversation ? (
           <>
             {/* Chat header */}
-            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <div className="px-4 py-3 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
               <div>
-                <div className="font-medium text-gray-900">{activeConversation.display_name}</div>
-                <div className="text-xs text-gray-500">
-                  {activeConversation.chat_identifier} · {totalMessages} {filtersActive ? 'matching' : ''} messages
+                <div className="text-body font-medium text-text-primary">{activeConversation.display_name}</div>
+                <div className="text-caption text-text-secondary">
+                  {activeConversation.chat_identifier} &middot; {totalMessages} {filtersActive ? 'matching' : ''} messages
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <select
                   value={exportFormat}
                   onChange={(e) => setExportFormat(e.target.value as 'txt' | 'csv' | 'html')}
-                  className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="text-body bg-surface text-text-primary rounded-md px-2 py-1 focus:outline-none focus:shadow-focus"
+                  style={{ border: '0.5px solid var(--border-default)' }}
                 >
                   <option value="txt">TXT</option>
                   <option value="csv">CSV</option>
@@ -216,7 +218,7 @@ export default function MessageView({ udid }: Props) {
                 <button
                   onClick={handleExport}
                   disabled={exporting}
-                  className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                  className="text-body text-text-accent hover:underline disabled:opacity-50"
                 >
                   {exporting ? 'Exporting...' : filtersActive ? 'Export filtered' : 'Export'}
                 </button>
@@ -224,8 +226,7 @@ export default function MessageView({ udid }: Props) {
             </div>
 
             {/* Filter bar */}
-            <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex-shrink-0 space-y-2">
-              {/* Search row */}
+            <div className="px-4 py-2 bg-surface flex-shrink-0 space-y-2" style={{ borderBottom: '0.5px solid var(--border-subtle)' }}>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -235,28 +236,28 @@ export default function MessageView({ udid }: Props) {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') applyFilters(msgSearch, dateFrom, dateTo);
                   }}
-                  className="flex-1 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 px-3 py-1.5 text-body bg-base text-text-primary rounded-md focus:outline-none focus:shadow-focus placeholder:text-text-tertiary"
+                  style={{ border: '0.5px solid var(--border-default)' }}
                 />
                 <button
                   onClick={() => applyFilters(msgSearch, dateFrom, dateTo)}
-                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="px-3 py-1.5 text-body bg-accent text-white rounded-md hover:bg-accent-hover transition-colors"
                 >
                   Search
                 </button>
                 {filtersActive && (
                   <button
                     onClick={handleClearFilters}
-                    className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded bg-white"
+                    className="px-3 py-1.5 text-body text-text-secondary bg-base rounded-md hover:bg-elevated transition-colors"
+                    style={{ border: '0.5px solid var(--border-default)' }}
                   >
                     Clear
                   </button>
                 )}
               </div>
 
-              {/* Date filter row */}
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Preset buttons */}
-                <span className="text-xs text-gray-400">Date:</span>
+                <span className="text-caption text-text-tertiary">Date:</span>
                 {[
                   { label: '3 months', months: 3 },
                   { label: '6 months', months: 6 },
@@ -277,13 +278,13 @@ export default function MessageView({ udid }: Props) {
                         applyPreset(p.from, p.to);
                       }
                     }}
-                    className="text-xs px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-100 text-gray-600"
+                    className="text-caption px-2 py-1 rounded-md bg-base text-text-secondary hover:bg-elevated transition-colors"
+                    style={{ border: '0.5px solid var(--border-default)' }}
                   >
                     {label}
                   </button>
                 ))}
 
-                {/* Custom date inputs */}
                 <input
                   type="date"
                   value={dateFrom}
@@ -291,9 +292,10 @@ export default function MessageView({ udid }: Props) {
                     setDateFrom(e.target.value);
                     applyFilters(msgSearch, e.target.value, dateTo);
                   }}
-                  className="text-xs px-2 py-1 border border-gray-200 rounded bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="text-caption px-2 py-1 rounded-md bg-base text-text-primary focus:outline-none focus:shadow-focus"
+                  style={{ border: '0.5px solid var(--border-default)' }}
                 />
-                <span className="text-xs text-gray-400">to</span>
+                <span className="text-caption text-text-tertiary">to</span>
                 <input
                   type="date"
                   value={dateTo}
@@ -301,18 +303,22 @@ export default function MessageView({ udid }: Props) {
                     setDateTo(e.target.value);
                     applyFilters(msgSearch, dateFrom, e.target.value);
                   }}
-                  className="text-xs px-2 py-1 border border-gray-200 rounded bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="text-caption px-2 py-1 rounded-md bg-base text-text-primary focus:outline-none focus:shadow-focus"
+                  style={{ border: '0.5px solid var(--border-default)' }}
                 />
               </div>
             </div>
 
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto px-4 py-4 bg-surface">
               {loading && (
-                <div className="text-center text-gray-500 text-sm py-8">Loading...</div>
+                <div className="flex items-center justify-center py-8 text-text-tertiary">
+                  <Loader2 size={16} strokeWidth={1.5} className="animate-spin mr-2" />
+                  <span className="text-body">Loading...</span>
+                </div>
               )}
               {!loading && messages.length === 0 && filtersActive && (
-                <div className="text-center text-gray-400 text-sm py-8">No messages match the current filters.</div>
+                <div className="text-center text-text-tertiary text-body py-8">No messages match the current filters.</div>
               )}
               <div className="space-y-1">
                 {messages.map((msg) => (
@@ -323,10 +329,10 @@ export default function MessageView({ udid }: Props) {
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-400">
+          <div className="flex items-center justify-center h-full text-text-tertiary">
             <div className="text-center">
-              <div className="text-4xl mb-3">💬</div>
-              <p>Select a conversation to view messages</p>
+              <MessageSquare size={32} strokeWidth={1.5} className="mx-auto mb-3 text-text-tertiary" />
+              <p className="text-body">Select a conversation to view messages</p>
             </div>
           </div>
         )}

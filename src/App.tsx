@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useBackup, BackupInfo } from './hooks/useBackup';
+import { useBackup } from './hooks/useBackup';
 import BackupSelector from './components/BackupSelector';
 import Dashboard from './components/Dashboard';
 
@@ -16,16 +16,16 @@ export default function App() {
   }, [backup.activeBackup]);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 text-gray-900">
-      {/* Title bar area */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-gray-800">
+    <div className="h-screen flex flex-col bg-base text-text-primary">
+      {/* Header */}
+      <header className="bg-surface shadow-toolbar px-5 flex items-center justify-between flex-shrink-0" style={{ height: '44px' }}>
+        <div className="flex items-center gap-2.5">
+          <h1 className="font-display text-body font-semibold text-text-primary">
             OpenExtract
           </h1>
           {backup.activeBackup && (
-            <span className="text-sm text-gray-500">
-              — {backup.activeBackup.device_name} (iOS {backup.activeBackup.product_version})
+            <span className="text-caption text-text-secondary">
+              — {backup.activeBackup.device_name} &middot; iOS {backup.activeBackup.product_version}
             </span>
           )}
         </div>
@@ -35,9 +35,9 @@ export default function App() {
               backup.setActiveBackup(null);
               setScreen('select');
             }}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="text-caption text-text-accent hover:bg-accent-subtle px-2 py-1 rounded-sm transition-colors duration-200"
           >
-            ← Change Backup
+            Change Backup
           </button>
         )}
       </header>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X, CheckCircle, FolderOpen, Loader2 } from 'lucide-react';
 import { ExportOptions } from '../../types';
 import { selectFolder } from '../../lib/ipc';
 
@@ -20,7 +21,7 @@ const DEFAULTS: ExportOptions = {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-gray-400 text-xs block mb-1">{label}</label>
+      <label className="text-text-secondary text-caption block mb-1">{label}</label>
       {children}
     </div>
   );
@@ -37,7 +38,8 @@ function StyledSelect({
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full bg-gray-800 text-gray-200 text-sm px-3 py-1.5 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+      className="w-full bg-gray-800 text-text-primary text-body px-3 py-1.5 rounded-lg focus:outline-none focus:shadow-focus"
+      style={{ border: '0.5px solid var(--border-default)' }}
     >
       {children}
     </select>
@@ -58,12 +60,12 @@ function Toggle({
         type="checkbox"
         checked={checked}
         onChange={e => onChange(e.target.checked)}
-        className="mt-0.5 w-4 h-4 accent-blue-500 flex-shrink-0"
+        className="mt-0.5 w-4 h-4 accent-[var(--accent)] flex-shrink-0"
       />
       <span>
-        <span className="text-gray-300 text-sm">{label}</span>
+        <span className="text-text-secondary text-body">{label}</span>
         {description && (
-          <span className="block text-gray-600 text-xs mt-0.5">{description}</span>
+          <span className="block text-text-tertiary text-caption mt-0.5">{description}</span>
         )}
       </span>
     </label>
@@ -101,19 +103,21 @@ export default function ExportDialog({ onClose, onExport }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md shadow-2xl">
+      <div className="bg-gray-900 rounded-xl w-full max-w-md shadow-2xl" style={{ border: '0.5px solid var(--border-default)' }}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
-          <h2 className="text-white font-medium">Export Photos</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">✕</button>
+        <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+          <h2 className="text-text-primary font-medium text-subhead">Export Photos</h2>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary transition-colors focus:outline-none focus:shadow-focus rounded-md p-0.5">
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {result ? (
           /* Completion screen */
           <div className="px-5 py-10 text-center">
-            <div className="text-4xl mb-3">✅</div>
-            <p className="text-white font-medium text-lg">Export Complete</p>
-            <p className="text-gray-400 text-sm mt-2">
+            <CheckCircle className="w-10 h-10 mx-auto mb-3 text-green-400" />
+            <p className="text-text-primary font-medium text-lg">Export Complete</p>
+            <p className="text-text-secondary text-body mt-2">
               {result.exported.toLocaleString()} items exported
               {result.errors > 0 && (
                 <span className="text-yellow-500"> · {result.errors} errors</span>
@@ -121,7 +125,7 @@ export default function ExportDialog({ onClose, onExport }: Props) {
             </p>
             <button
               onClick={onClose}
-              className="mt-5 bg-blue-600 hover:bg-blue-500 text-white text-sm px-5 py-2 rounded-lg transition-colors"
+              className="mt-5 bg-accent hover:bg-accent-hover text-white text-body px-5 py-2 rounded-lg transition-colors focus:outline-none focus:shadow-focus"
             >
               Done
             </button>
@@ -134,13 +138,16 @@ export default function ExportDialog({ onClose, onExport }: Props) {
                 <input
                   readOnly
                   value={outputDir}
-                  placeholder="Choose a destination folder…"
-                  className="flex-1 bg-gray-800 text-gray-300 text-sm px-3 py-1.5 rounded border border-gray-600 placeholder-gray-600 focus:outline-none"
+                  placeholder="Choose a destination folder..."
+                  className="flex-1 bg-gray-800 text-text-secondary text-body px-3 py-1.5 rounded-lg placeholder:text-text-tertiary focus:outline-none"
+                  style={{ border: '0.5px solid var(--border-default)' }}
                 />
                 <button
                   onClick={pickFolder}
-                  className="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm px-3 py-1.5 rounded border border-gray-600 transition-colors flex-shrink-0"
+                  className="bg-gray-700 hover:bg-gray-600 text-text-primary text-body px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 focus:outline-none focus:shadow-focus inline-flex items-center gap-1.5"
+                  style={{ border: '0.5px solid var(--border-default)' }}
                 >
+                  <FolderOpen className="w-3.5 h-3.5" />
                   Browse
                 </button>
               </div>
@@ -152,8 +159,8 @@ export default function ExportDialog({ onClose, onExport }: Props) {
                 value={options.folder_structure}
                 onChange={v => set('folder_structure', v as ExportOptions['folder_structure'])}
               >
-                <option value="flat">Flat — all files in one folder</option>
-                <option value="by_date">By Date — organised as YYYY/MM/</option>
+                <option value="flat">Flat -- all files in one folder</option>
+                <option value="by_date">By Date -- organised as YYYY/MM/</option>
                 <option value="by_album">By Album</option>
               </StyledSelect>
             </Field>
@@ -164,7 +171,7 @@ export default function ExportDialog({ onClose, onExport }: Props) {
                 value={options.format}
                 onChange={v => set('format', v as ExportOptions['format'])}
               >
-                <option value="original">Original — preserve HEIC/RAW</option>
+                <option value="original">Original -- preserve HEIC/RAW</option>
                 <option value="jpeg">Convert to JPEG</option>
               </StyledSelect>
             </Field>
@@ -178,9 +185,9 @@ export default function ExportDialog({ onClose, onExport }: Props) {
                   max={100}
                   value={options.jpeg_quality}
                   onChange={e => set('jpeg_quality', Number(e.target.value))}
-                  className="w-full accent-blue-500"
+                  className="w-full accent-[var(--accent)]"
                 />
-                <div className="flex justify-between text-gray-600 text-[10px] mt-0.5">
+                <div className="flex justify-between text-text-tertiary text-caption mt-0.5">
                   <span>Smaller file</span>
                   <span>Higher quality</span>
                 </div>
@@ -215,25 +222,32 @@ export default function ExportDialog({ onClose, onExport }: Props) {
 
             {/* Error */}
             {exportError && (
-              <p className="text-red-400 text-sm bg-red-900/30 border border-red-800 rounded px-3 py-2">
+              <p className="text-red-400 text-body bg-red-900/30 rounded-lg px-3 py-2" style={{ border: '0.5px solid var(--border-danger)' }}>
                 {exportError}
               </p>
             )}
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-1 border-t border-gray-800">
+            <div className="flex justify-end gap-2 pt-1" style={{ borderTop: '0.5px solid var(--border-default)' }}>
               <button
                 onClick={onClose}
-                className="text-gray-400 hover:text-white text-sm px-4 py-2 transition-colors"
+                className="text-text-tertiary hover:text-text-primary text-body px-4 py-2 transition-colors focus:outline-none focus:shadow-focus rounded-lg"
               >
                 Cancel
               </button>
               <button
                 onClick={handleExport}
                 disabled={!outputDir || exporting}
-                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
+                className="bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed text-white text-body px-4 py-2 rounded-lg transition-colors focus:outline-none focus:shadow-focus inline-flex items-center gap-1.5"
               >
-                {exporting ? 'Exporting…' : 'Export'}
+                {exporting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  'Export'
+                )}
               </button>
             </div>
           </div>

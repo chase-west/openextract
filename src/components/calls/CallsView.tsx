@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Search, Loader2, AlertTriangle, Inbox, Lock, Download, Video, Phone, MessageSquare, Smartphone } from 'lucide-react';
 import { BackupInfo } from '../../hooks/useBackup';
 import { format, parseISO } from 'date-fns';
 
@@ -18,7 +19,7 @@ interface Props {
 }
 
 function formatDuration(seconds: number): string {
-    if (!seconds) return '0s';
+    if (!seconds) return '—';
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
@@ -53,7 +54,6 @@ export default function CallsView({ backup }: Props) {
             const res = await window.openextract.call('list_calls', { udid: backup.udid, limit: 10000 });
             if (!res.success) throw new Error(res.error);
             if (res.data?.error) throw new Error(res.data.error);
-
             setCalls(res.data?.calls || []);
         } catch (err: any) {
             setError(err.message || 'Failed to load calls');
@@ -66,17 +66,9 @@ export default function CallsView({ backup }: Props) {
         setExporting(true);
         try {
             const folder = await window.openextract.saveFolder();
-            if (!folder) return; // User cancelled
-
-            const res = await window.openextract.call('export_calls', {
-                udid: backup.udid,
-                output_dir: folder
-            });
-
-            if (!res.success || res.data.error) {
-                throw new Error(res.error || res.data.error);
-            }
-
+            if (!folder) return;
+            const res = await window.openextract.call('export_calls', { udid: backup.udid, output_dir: folder });
+            if (!res.success || res.data.error) throw new Error(res.error || res.data.error);
             alert(`Successfully exported calls to ${folder}`);
         } catch (err: any) {
             alert('Export failed: ' + err.message);
@@ -87,8 +79,6 @@ export default function CallsView({ backup }: Props) {
 
     const filteredAndSortedCalls = useMemo(() => {
         let result = calls;
-
-        // Filter
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             result = result.filter(c =>
@@ -97,37 +87,19 @@ export default function CallsView({ backup }: Props) {
                 c.app?.toLowerCase().includes(q)
             );
         }
-
-        // Sort
         result = [...result].sort((a, b) => {
             let configA, configB;
             switch (sortBy) {
-                case 'date':
-                    configA = new Date(a.date).getTime();
-                    configB = new Date(b.date).getTime();
-                    break;
-                case 'contact_name':
-                    configA = a.contact_name?.toLowerCase() || '';
-                    configB = b.contact_name?.toLowerCase() || '';
-                    break;
-                case 'duration':
-                    configA = a.duration || 0;
-                    configB = b.duration || 0;
-                    break;
-                case 'type':
-                    configA = a.direction || '';
-                    configB = b.direction || '';
-                    break;
-                default:
-                    configA = 0;
-                    configB = 0;
+                case 'date': configA = new Date(a.date).getTime(); configB = new Date(b.date).getTime(); break;
+                case 'contact_name': configA = a.contact_name?.toLowerCase() || ''; configB = b.contact_name?.toLowerCase() || ''; break;
+                case 'duration': configA = a.duration || 0; configB = b.duration || 0; break;
+                case 'type': configA = a.direction || ''; configB = b.direction || ''; break;
+                default: configA = 0; configB = 0;
             }
-
             if (configA < configB) return sortOrder === 'asc' ? -1 : 1;
             if (configA > configB) return sortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-
         return result;
     }, [calls, searchQuery, sortBy, sortOrder]);
 
@@ -141,154 +113,139 @@ export default function CallsView({ backup }: Props) {
             setSortBy(field);
             setSortOrder(field === 'date' ? 'desc' : 'asc');
         }
-        setPage(0); // Reset page on sort
+        setPage(0);
     };
 
     const StatusIcon = ({ direction, status }: { direction: string, status: string }) => {
-        if (status === 'missed') {
-            return <div className="text-red-500" title="Missed Call">↳ Missed</div>;
-        }
-        if (direction === 'incoming') {
-            return <div className="text-blue-500" title="Incoming Call">↙ Incoming</div>;
-        }
-        if (direction === 'outgoing') {
-            return <div className="text-green-500" title="Outgoing Call">↗ Outgoing</div>;
-        }
-        return <div className="text-gray-400">? Unknown</div>;
+        if (status === 'missed') return <span className="text-apple-error font-medium">&#8627; Missed</span>;
+        if (direction === 'incoming') return <span style={{ color: '#007AFF' }} className="font-medium">&#8601; Incoming</span>;
+        if (direction === 'outgoing') return <span className="text-apple-success font-medium">&#8599; Outgoing</span>;
+        return <span className="text-text-tertiary">Unknown</span>;
     };
 
-    const getIconPrefix = (app: string) => {
+    const getServiceIcon = (app: string) => {
         const a = app.toLowerCase();
-        if (a.includes('facetime video')) return '📹 ';
-        if (a.includes('facetime')) return '📞 ';
-        if (a.includes('whatsapp')) return '💬 ';
-        if (a.includes('skype')) return '🚾 ';
-        return '📱 ';
+        if (a.includes('facetime video')) return <Video size={12} strokeWidth={1.5} />;
+        if (a.includes('facetime')) return <Phone size={12} strokeWidth={1.5} />;
+        if (a.includes('whatsapp')) return <MessageSquare size={12} strokeWidth={1.5} />;
+        return <Smartphone size={12} strokeWidth={1.5} />;
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#0f1115] text-gray-200 font-sans">
+        <div className="flex flex-col h-full bg-base text-text-primary">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-800 bg-[#161920]">
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
                 <div>
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                        Call History
-                    </h2>
-                    <p className="text-sm text-gray-400 mt-1">
-                        {loading ? 'Analyzing iOS backup logs...' : `${calls.length.toLocaleString()} calls extracted`}
+                    <h2 className="font-display text-title font-semibold text-text-primary">Calls</h2>
+                    <p className="text-caption text-text-tertiary mt-0.5">
+                        {loading ? 'Loading...' : `${calls.length.toLocaleString()} calls extracted`}
                     </p>
                 </div>
-
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                     <div className="relative">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-500">
-                            🔍
-                        </span>
+                        <Search size={14} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
                         <input
                             type="text"
-                            placeholder="Filter by name, number, service..."
-                            className="bg-[#1f222b] border border-gray-700 text-gray-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-64 pl-10 pt-2 pb-2 transition-colors"
+                            placeholder="Filter..."
+                            className="bg-base text-body text-text-primary rounded-lg w-56 pl-8 pr-3 py-1.5 focus:outline-none focus:shadow-focus placeholder:text-text-tertiary transition-colors"
+                            style={{ border: '0.5px solid var(--border-strong)' }}
                             value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setPage(0);
-                            }}
+                            onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
                         />
                     </div>
                     <button
                         onClick={handleExport}
                         disabled={exporting || calls.length === 0}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg text-sm font-medium disabled:opacity-50 transition-all flex items-center gap-2"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white rounded-lg text-body font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
                     >
-                        <span>{exporting ? 'Exporting CSV...' : 'Export to CSV'}</span> ⬇
+                        <Download size={14} strokeWidth={1.5} />
+                        {exporting ? 'Exporting...' : 'Export'}
                     </button>
                 </div>
             </div>
 
-            {/* Table Container */}
-            <div className="flex-1 overflow-auto p-6 bg-[#0f1115]">
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-6 bg-base">
                 {loading && (
-                    <div className="flex flex-col items-center justify-center h-full text-blue-400 animate-pulse">
-                        <div className="text-4xl mb-4">⏳</div>
-                        <p>Decrypting call history database...</p>
+                    <div className="flex flex-col items-center justify-center h-full text-text-tertiary">
+                        <Loader2 size={24} strokeWidth={1.5} className="animate-spin mb-3" />
+                        <p className="text-body">Loading call history...</p>
                     </div>
                 )}
 
                 {error && (
-                    <div className="flex flex-col items-center justify-center h-full text-red-400">
+                    <div className="flex flex-col items-center justify-center h-full">
                         {error.toLowerCase().includes('encrypt') ? (
                             <>
-                                <div className="text-4xl mb-4 text-yellow-500">🔒</div>
-                                <h3 className="text-xl font-semibold text-gray-200 mb-2">Encrypted Backup Required</h3>
-                                <p className="text-center text-gray-400 max-w-md">
-                                    Apple specifically blocks call history logs from saving to unencrypted iTunes backups.
-                                    To view your calls, please check the <strong>"Encrypt local backup"</strong> box in iTunes/Finder and perform a fresh backup of your device.
+                                <Lock size={32} strokeWidth={1.5} className="text-apple-warning mb-3" />
+                                <h3 className="text-subhead font-semibold text-text-primary mb-2">Encrypted Backup Required</h3>
+                                <p className="text-center text-body text-text-secondary max-w-md">
+                                    Apple blocks call history from unencrypted backups.
+                                    Enable <strong>"Encrypt local backup"</strong> in iTunes/Finder and create a new backup.
                                 </p>
                             </>
                         ) : (
                             <>
-                                <div className="text-4xl mb-4">⚠️</div>
-                                <p>{error}</p>
+                                <AlertTriangle size={24} strokeWidth={1.5} className="text-apple-error mb-3" />
+                                <p className="text-body text-apple-error">{error}</p>
                             </>
                         )}
                     </div>
                 )}
 
                 {!loading && !error && filteredAndSortedCalls.length === 0 && (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                        <div className="text-4xl mb-4 mb-2 opacity-50">📭</div>
-                        <p>No valid call records found matching criteria.</p>
+                    <div className="flex flex-col items-center justify-center h-full text-text-tertiary">
+                        <Inbox size={24} strokeWidth={1.5} className="mb-3" />
+                        <p className="text-body">No call records found.</p>
                     </div>
                 )}
 
                 {!loading && !error && filteredAndSortedCalls.length > 0 && (
-                    <div className="ring-1 ring-gray-800 rounded-xl overflow-hidden shadow-2xl bg-[#161920]">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-gray-400 uppercase bg-[#1a1d24] border-b border-gray-800">
-                                <tr>
-                                    <th scope="col" className="px-6 py-4 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('type')}>
-                                        Type/Status {sortBy === 'type' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    <div className="bg-base rounded-xl overflow-hidden" style={{ border: '0.5px solid var(--border-default)' }}>
+                        <table className="w-full text-body text-left">
+                            <thead>
+                                <tr className="bg-surface" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+                                    <th className="px-4 py-2.5 text-caption font-medium text-text-secondary cursor-pointer hover:text-text-primary transition-colors" onClick={() => handleSort('type')}>
+                                        Type {sortBy === 'type' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
-                                    <th scope="col" className="px-6 py-4 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('contact_name')}>
+                                    <th className="px-4 py-2.5 text-caption font-medium text-text-secondary cursor-pointer hover:text-text-primary transition-colors" onClick={() => handleSort('contact_name')}>
                                         Contact {sortBy === 'contact_name' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
-                                    <th scope="col" className="px-6 py-4 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('date')}>
+                                    <th className="px-4 py-2.5 text-caption font-medium text-text-secondary cursor-pointer hover:text-text-primary transition-colors" onClick={() => handleSort('date')}>
                                         Date {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
-                                    <th scope="col" className="px-6 py-4 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('duration')}>
+                                    <th className="px-4 py-2.5 text-caption font-medium text-text-secondary cursor-pointer hover:text-text-primary transition-colors" onClick={() => handleSort('duration')}>
                                         Duration {sortBy === 'duration' && (sortOrder === 'asc' ? '↑' : '↓')}
                                     </th>
-                                    <th scope="col" className="px-6 py-4">
-                                        Service
-                                    </th>
+                                    <th className="px-4 py-2.5 text-caption font-medium text-text-secondary">Service</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-800">
+                            <tbody>
                                 {paginatedCalls.map((call) => (
-                                    <tr key={call.call_id} className="hover:bg-[#1f222b] transition-colors group">
-                                        <td className="px-6 py-3 font-medium">
+                                    <tr key={call.call_id} className="hover:bg-accent-subtle transition-colors duration-200" style={{ height: '44px', borderBottom: '0.5px solid var(--border-subtle)' }}>
+                                        <td className="px-4 py-2">
                                             <StatusIcon direction={call.direction} status={call.status} />
                                         </td>
-                                        <td className="px-6 py-3">
+                                        <td className="px-4 py-2">
                                             <div className="flex flex-col">
-                                                <span className="text-gray-100 font-semibold truncate max-w-xs">{call.contact_name}</span>
+                                                <span className="text-text-primary font-medium truncate max-w-xs">{call.contact_name}</span>
                                                 {call.contact_name !== call.address && call.address && (
-                                                    <span className="text-gray-500 text-xs truncate max-w-xs">{call.address}</span>
+                                                    <span className="font-mono text-caption text-text-tertiary truncate max-w-xs">{call.address}</span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3 whitespace-nowrap text-gray-300">
+                                        <td className="px-4 py-2 whitespace-nowrap">
                                             <div className="flex flex-col">
-                                                <span>{call.date ? format(parseISO(call.date), 'MMM d, yyyy') : 'Unknown'}</span>
-                                                <span className="text-gray-500 text-xs">{call.date ? format(parseISO(call.date), 'h:mm:ss a') : ''}</span>
+                                                <span className="text-text-secondary">{call.date ? format(parseISO(call.date), 'MMM d, yyyy') : 'Unknown'}</span>
+                                                <span className="font-mono text-caption text-text-tertiary">{call.date ? format(parseISO(call.date), 'h:mm:ss a') : ''}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3 font-mono text-gray-400">
+                                        <td className="px-4 py-2 font-mono text-text-tertiary">
                                             {formatDuration(call.duration)}
                                         </td>
-                                        <td className="px-6 py-3 text-gray-400">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1a1d24] border border-gray-700 group-hover:bg-[#252833] transition-colors">
-                                                {getIconPrefix(call.app)} {call.app}
+                                        <td className="px-4 py-2">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-caption text-text-secondary bg-surface" style={{ border: '0.5px solid var(--border-default)' }}>
+                                                {getServiceIcon(call.app)} {call.app}
                                             </span>
                                         </td>
                                     </tr>
@@ -296,27 +253,14 @@ export default function CallsView({ backup }: Props) {
                             </tbody>
                         </table>
 
-                        {/* Pagination Footer */}
                         {totalPages > 1 && (
-                            <div className="flex items-center justify-between px-6 py-3 bg-[#1a1d24] border-t border-gray-800">
-                                <span className="text-sm text-gray-400">
-                                    Showing <span className="font-semibold text-white">{page * pageSize + 1}</span> to <span className="font-semibold text-white">{Math.min((page + 1) * pageSize, filteredAndSortedCalls.length)}</span> of <span className="font-semibold text-white">{filteredAndSortedCalls.length}</span> Calls
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-surface" style={{ borderTop: '0.5px solid var(--border-default)' }}>
+                                <span className="text-caption text-text-tertiary">
+                                    Showing <span className="font-medium text-text-primary">{page * pageSize + 1}</span>–<span className="font-medium text-text-primary">{Math.min((page + 1) * pageSize, filteredAndSortedCalls.length)}</span> of <span className="font-medium text-text-primary">{filteredAndSortedCalls.length}</span>
                                 </span>
-                                <div className="inline-flex mt-2 xs:mt-0 gap-1">
-                                    <button
-                                        onClick={() => setPage(p => Math.max(0, p - 1))}
-                                        disabled={page === 0}
-                                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-white bg-[#252833] rounded-md hover:bg-[#2d303b] disabled:opacity-50 transition-colors"
-                                    >
-                                        Prev
-                                    </button>
-                                    <button
-                                        onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                                        disabled={page === totalPages - 1}
-                                        className="inline-flex items-center px-3 py-1 text-sm font-medium text-white bg-[#252833] rounded-md hover:bg-[#2d303b] disabled:opacity-50 transition-colors"
-                                    >
-                                        Next
-                                    </button>
+                                <div className="inline-flex gap-1">
+                                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-3 py-1 text-caption text-text-secondary bg-base rounded-sm hover:bg-elevated disabled:opacity-50 transition-colors" style={{ border: '0.5px solid var(--border-strong)' }}>Prev</button>
+                                    <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} className="px-3 py-1 text-caption text-text-secondary bg-base rounded-sm hover:bg-elevated disabled:opacity-50 transition-colors" style={{ border: '0.5px solid var(--border-strong)' }}>Next</button>
                                 </div>
                             </div>
                         )}

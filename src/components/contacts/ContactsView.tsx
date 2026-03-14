@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Loader2, AlertTriangle, Inbox, Phone, Mail, Building2, StickyNote } from 'lucide-react';
+import { Search, Loader2, AlertTriangle, Inbox, Phone, Mail, Building2, StickyNote, Download } from 'lucide-react';
 import { BackupInfo } from '../../hooks/useBackup';
 
 interface Contact {
@@ -61,6 +61,28 @@ export default function ContactsView({ backup }: Props) {
     const paginatedContacts = filteredContacts.slice(page * pageSize, (page + 1) * pageSize);
     const totalPages = Math.ceil(filteredContacts.length / pageSize);
 
+    function exportToCSV() {
+        const headers = ['First Name', 'Last Name', 'Display Name', 'Organization', 'Phone Numbers', 'Email Addresses', 'Notes'];
+        const escape = (val: string) => `"${(val ?? '').replace(/"/g, '""')}"`;
+        const rows = contacts.map(c => [
+            escape(c.first_name),
+            escape(c.last_name),
+            escape(c.display_name),
+            escape(c.organization),
+            escape(c.phones.join('; ')),
+            escape(c.emails.join('; ')),
+            escape(c.note),
+        ]);
+        const csv = [headers.map(h => `"${h}"`).join(','), ...rows.map(r => r.join(','))].join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `contacts_${backup.udid.slice(0, 8)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
     return (
         <div className="flex flex-col h-full bg-base text-text-primary">
             {/* Header */}
@@ -71,16 +93,26 @@ export default function ContactsView({ backup }: Props) {
                         {loading ? 'Loading...' : `${contacts.length.toLocaleString()} contacts found`}
                     </p>
                 </div>
-                <div className="relative">
-                    <Search size={14} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
-                    <input
-                        type="text"
-                        placeholder="Find name, number, email..."
-                        className="bg-base text-body text-text-primary rounded-lg w-64 pl-8 pr-3 py-1.5 focus:outline-none focus:shadow-focus placeholder:text-text-tertiary transition-colors"
-                        style={{ border: '0.5px solid var(--border-strong)' }}
-                        value={searchQuery}
-                        onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
-                    />
+
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Search size={14} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                        <input
+                            type="text"
+                            placeholder="Find name, number, email..."
+                            className="bg-base text-body text-text-primary rounded-lg w-64 pl-8 pr-3 py-1.5 focus:outline-none focus:shadow-focus placeholder:text-text-tertiary transition-colors"
+                            style={{ border: '0.5px solid var(--border-strong)' }}
+                            value={searchQuery}
+                            onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
+                        />
+                    </div>
+                    <button
+                        onClick={exportToCSV}
+                        disabled={loading || contacts.length === 0}
+                        className="flex items-center gap-2 px-3 py-1.5 text-body font-medium text-white bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                    >
+                        <Download size={14} strokeWidth={1.5} /> Export CSV
+                    </button>
                 </div>
             </div>
 

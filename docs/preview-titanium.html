@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Titanium — OpenExtract UI Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #ffffff;
+    --bg-surface: #f5f5f7;
+    --bg-elevated: #e8e8ed;
+    --bg-sidebar: rgba(245, 245, 247, 0.85);
+    --bg-sidebar-active: rgba(0, 0, 0, 0.06);
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #aeaeb2;
+    --text-accent: #0071e3;
+    --border-subtle: rgba(0, 0, 0, 0.04);
+    --border-default: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.14);
+    --accent: #0071e3;
+    --accent-hover: #0077ed;
+    --accent-subtle: rgba(0, 113, 227, 0.08);
+    --success: #30d158;
+    --warning: #ff9f0a;
+    --error: #ff3b30;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 14px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'SF Mono', Menlo, Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font-sans); background: var(--bg-base); color: var(--text-primary); font-size: 13px; }
+
+  .variant-label {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: linear-gradient(135deg, #0071e3, #0055b3);
+    color: white; text-align: center; padding: 10px; font-weight: 700; font-size: 14px;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .variant-label span { font-weight: 400; opacity: 0.85; text-transform: none; letter-spacing: 0; }
+
+  .app { display: flex; flex-direction: column; height: 100vh; padding-top: 38px; }
+
+  /* TITLEBAR — macOS-inspired */
+  .titlebar {
+    height: 44px; background: var(--bg-surface);
+    box-shadow: 0 0.5px 0 rgba(0,0,0,0.1);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0;
+  }
+  .titlebar-left { display: flex; align-items: center; gap: 10px; }
+  .traffic-lights { display: flex; gap: 7px; margin-right: 8px; }
+  .traffic-light { width: 12px; height: 12px; border-radius: 50%; }
+  .tl-close { background: #ff5f57; }
+  .tl-min { background: #febc2e; }
+  .tl-max { background: #28c840; }
+  .titlebar h1 { font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .device-info { font-size: 12px; color: var(--text-secondary); }
+  .change-btn {
+    background: none; border: none; color: var(--text-accent); font-size: 12px;
+    cursor: pointer; font-family: var(--font-sans); padding: 4px 8px; border-radius: var(--radius-sm);
+    transition: background 0.2s ease;
+  }
+  .change-btn:hover { background: var(--accent-subtle); }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR — translucent macOS style */
+  .sidebar {
+    width: 180px; background: var(--bg-sidebar); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-right: 0.5px solid var(--border-default);
+    display: flex; flex-direction: column; padding: 8px 8px; gap: 1px; flex-shrink: 0;
+  }
+  .nav-section { font-size: 11px; font-weight: 600; color: var(--text-tertiary); padding: 12px 10px 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .nav-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-md);
+    color: var(--text-secondary); font-size: 13px; cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .nav-item:hover { background: rgba(0,0,0,0.04); }
+  .nav-item.active {
+    background: var(--bg-sidebar-active); color: var(--text-primary); font-weight: 500;
+  }
+  .nav-item.active svg { color: var(--text-accent); }
+  .nav-item svg { width: 16px; height: 16px; stroke-width: 1.5; color: var(--text-tertiary); flex-shrink: 0; }
+  .nav-count { margin-left: auto; font-size: 11px; color: var(--text-tertiary); }
+  .sidebar-footer {
+    margin-top: auto; padding: 8px 10px; font-size: 11px; color: var(--text-tertiary);
+    border-top: 0.5px solid var(--border-default);
+  }
+
+  /* CONTENT */
+  .content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  .content-header {
+    padding: 20px 24px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 0.5px solid var(--border-default);
+  }
+  .content-header h2 { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--text-primary); letter-spacing: -0.015em; }
+  .content-header .count { font-size: 13px; color: var(--text-tertiary); margin-left: 8px; font-weight: 400; }
+
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .search-input {
+    background: var(--bg-base); border: 0.5px solid var(--border-strong); border-radius: var(--radius-lg);
+    color: var(--text-primary); font-size: 13px; padding: 6px 12px 6px 32px;
+    width: 240px; font-family: var(--font-sans); transition: all 0.2s ease; outline: none;
+  }
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+  .search-input::placeholder { color: var(--text-tertiary); }
+  .search-wrap { position: relative; }
+  .search-wrap svg {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 14px; color: var(--text-tertiary); stroke-width: 1.5;
+  }
+  .btn-primary {
+    background: var(--accent); color: white; border: none; border-radius: var(--radius-lg);
+    padding: 6px 14px; font-size: 13px; font-weight: 500; cursor: pointer;
+    font-family: var(--font-sans); transition: all 0.2s ease;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  /* TABLE */
+  .table-container {
+    margin: 16px 24px; background: var(--bg-base); border: 0.5px solid var(--border-default);
+    border-radius: var(--radius-xl); overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--bg-surface); }
+  th {
+    padding: 10px 16px; font-size: 11px; font-weight: 500; color: var(--text-secondary);
+    text-align: left; border-bottom: 0.5px solid var(--border-default);
+  }
+  td { padding: 10px 16px; font-size: 13px; border-bottom: 0.5px solid var(--border-subtle); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.2s ease; height: 44px; }
+  tbody tr:hover { background: var(--accent-subtle); }
+  .cell-primary { color: var(--text-primary); font-weight: 500; }
+  .cell-secondary { color: var(--text-secondary); }
+  .cell-tertiary { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 11px; }
+  .status-missed { color: var(--error); }
+  .status-incoming { color: #007aff; }
+  .status-outgoing { color: var(--success); }
+  .service-badge {
+    display: inline-flex; background: var(--bg-surface); border: 0.5px solid var(--border-default);
+    border-radius: var(--radius-sm); padding: 2px 8px; font-size: 11px; color: var(--text-secondary);
+  }
+  .table-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: var(--bg-surface); border-top: 0.5px solid var(--border-default);
+    font-size: 12px; color: var(--text-tertiary);
+  }
+  .table-footer strong { color: var(--text-primary); font-weight: 500; }
+  .pagination { display: flex; gap: 4px; }
+  .page-btn {
+    background: var(--bg-base); border: 0.5px solid var(--border-strong); border-radius: var(--radius-sm);
+    color: var(--text-secondary); padding: 4px 12px; font-size: 12px; cursor: pointer;
+    font-family: var(--font-sans); transition: all 0.2s ease;
+  }
+  .page-btn:hover { background: var(--bg-surface); }
+
+  /* BACKUP CARDS */
+  .section-divider {
+    padding: 28px 24px 12px; font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .cards-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 0 24px 24px; }
+  .card {
+    background: var(--bg-surface); border: 0.5px solid var(--border-default); border-radius: var(--radius-lg);
+    padding: 16px; transition: all 0.25s ease-in-out; cursor: pointer;
+  }
+  .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-color: var(--border-strong); }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+  .card-name { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .card-size { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
+  .card-meta { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .encrypted-badge {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 8px;
+    background: rgba(255,159,10,0.1); color: #c77c00; border: 0.5px solid rgba(255,159,10,0.25);
+    border-radius: 9999px; padding: 2px 10px; font-size: 11px; font-weight: 500;
+  }
+
+  /* CONTACTS */
+  .contacts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 24px 24px; }
+  .contact-card {
+    background: var(--bg-surface); border: 0.5px solid var(--border-default); border-radius: var(--radius-lg);
+    padding: 16px; transition: all 0.25s ease-in-out;
+  }
+  .contact-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .contact-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 0.5px solid var(--border-default); }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent); display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 600; font-size: 15px; color: white; flex-shrink: 0;
+  }
+  .contact-name { font-family: var(--font-display); font-size: 15px; font-weight: 500; color: var(--text-primary); letter-spacing: -0.01em; }
+  .contact-org { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .contact-detail {
+    display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); padding: 2px 0;
+  }
+  .contact-detail svg { width: 13px; height: 13px; color: var(--text-tertiary); flex-shrink: 0; }
+  .contact-detail .mono { font-family: var(--font-mono); font-size: 11px; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+</style>
+</head>
+<body>
+
+<div class="variant-label">Variant 3 — Titanium <span>/ System-adaptive, Apple-native. macOS Sequoia.</span></div>
+
+<div class="app">
+  <div class="titlebar">
+    <div class="titlebar-left">
+      <div class="traffic-lights">
+        <div class="traffic-light tl-close"></div>
+        <div class="traffic-light tl-min"></div>
+        <div class="traffic-light tl-max"></div>
+      </div>
+      <h1>OpenExtract</h1>
+      <span class="device-info">&mdash; iPhone 15 Pro &middot; iOS 18.1</span>
+    </div>
+    <button class="change-btn">Change Backup</button>
+  </div>
+
+  <div class="main">
+    <nav class="sidebar">
+      <div class="nav-section">Data</div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Messages
+        <span class="nav-count">847</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        Photos
+        <span class="nav-count">2.4k</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>
+        Voicemail
+        <span class="nav-count">23</span>
+      </div>
+      <div class="nav-item active">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94m-1 7.98v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.11 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg>
+        Calls
+        <span class="nav-count">1.2k</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Contacts
+        <span class="nav-count">847</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Notes
+        <span class="nav-count">156</span>
+      </div>
+      <div class="sidebar-footer">v1.0.0</div>
+    </nav>
+
+    <div class="content">
+      <div class="content-header">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <h2>Calls</h2>
+          <span class="count" style="color:var(--text-tertiary);font-size:13px">1,247</span>
+        </div>
+        <div class="header-actions">
+          <div class="search-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" class="search-input" placeholder="Filter...">
+          </div>
+          <button class="btn-primary">Export</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead><tr><th>Type</th><th>Contact</th><th>Date</th><th>Duration</th><th>Service</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="status-incoming">&#8601; Incoming</td>
+              <td><div class="cell-primary">John Smith</div><div class="cell-tertiary">+1 (555) 123-4567</div></td>
+              <td><div class="cell-secondary">Mar 12, 2026</div><div class="cell-tertiary">2:15 PM</div></td>
+              <td class="cell-tertiary">3m 24s</td>
+              <td><span class="service-badge">Phone</span></td>
+            </tr>
+            <tr>
+              <td class="status-missed">&#8627; Missed</td>
+              <td><div class="cell-primary">Mom</div><div class="cell-tertiary">+1 (555) 987-6543</div></td>
+              <td><div class="cell-secondary">Mar 12, 2026</div><div class="cell-tertiary">1:45 PM</div></td>
+              <td class="cell-tertiary">&mdash;</td>
+              <td><span class="service-badge">Phone</span></td>
+            </tr>
+            <tr>
+              <td class="status-outgoing">&#8599; Outgoing</td>
+              <td><div class="cell-primary">Alice Chen</div><div class="cell-tertiary">+1 (555) 456-7890</div></td>
+              <td><div class="cell-secondary">Mar 11, 2026</div><div class="cell-tertiary">6:30 PM</div></td>
+              <td class="cell-tertiary">12m 5s</td>
+              <td><span class="service-badge">FaceTime</span></td>
+            </tr>
+            <tr>
+              <td class="status-incoming">&#8601; Incoming</td>
+              <td><div class="cell-primary">David Park</div><div class="cell-tertiary">+1 (555) 222-3333</div></td>
+              <td><div class="cell-secondary">Mar 11, 2026</div><div class="cell-tertiary">3:12 PM</div></td>
+              <td class="cell-tertiary">45s</td>
+              <td><span class="service-badge">WhatsApp</span></td>
+            </tr>
+            <tr>
+              <td class="status-outgoing">&#8599; Outgoing</td>
+              <td><div class="cell-primary">Sarah Johnson</div><div class="cell-tertiary">+1 (555) 888-9999</div></td>
+              <td><div class="cell-secondary">Mar 10, 2026</div><div class="cell-tertiary">11:20 AM</div></td>
+              <td class="cell-tertiary">8m 17s</td>
+              <td><span class="service-badge">Phone</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <span>Showing <strong>1</strong>&ndash;<strong>100</strong> of <strong>1,247</strong></span>
+          <div class="pagination"><button class="page-btn">&#9664;</button><button class="page-btn">&#9654;</button></div>
+        </div>
+      </div>
+
+      <div class="section-divider">Backup Selector Preview</div>
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-top"><div class="card-name">iPhone 15 Pro</div><div class="card-size">28.4 GB</div></div>
+          <div class="card-meta">iOS 18.1 &middot; iPhone16,1<br>Last backup: Mar 12, 2026 at 11:30 PM</div>
+        </div>
+        <div class="card">
+          <div class="card-top"><div class="card-name">iPhone 14</div><div class="card-size">15.2 GB</div></div>
+          <div class="card-meta">iOS 17.4 &middot; iPhone15,2<br>Last backup: Feb 28, 2026 at 9:15 AM</div>
+          <div class="encrypted-badge">&#x1f512; Encrypted</div>
+        </div>
+      </div>
+
+      <div class="section-divider">Contact Cards Preview</div>
+      <div class="contacts-grid">
+        <div class="contact-card">
+          <div class="contact-top"><div class="avatar">J</div><div><div class="contact-name">John Smith</div><div class="contact-org">Acme Corporation</div></div></div>
+          <div class="contact-detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg><span class="mono">+1 (555) 123-4567</span></div>
+          <div class="contact-detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>john@acme.com</div>
+        </div>
+        <div class="contact-card">
+          <div class="contact-top"><div class="avatar">A</div><div><div class="contact-name">Alice Chen</div><div class="contact-org">Startup Labs</div></div></div>
+          <div class="contact-detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg><span class="mono">+1 (555) 456-7890</span></div>
+          <div class="contact-detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>alice@startuplabs.io</div>
+        </div>
+        <div class="contact-card">
+          <div class="contact-top"><div class="avatar">S</div><div><div class="contact-name">Sarah Johnson</div></div></div>
+          <div class="contact-detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72"/></svg><span class="mono">+1 (555) 888-9999</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

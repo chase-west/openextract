@@ -1,6 +1,7 @@
 import { Message } from '../hooks/useMessages';
 import { formatTime, formatDateTime } from '../lib/dates';
 import { useState } from 'react';
+import { MapPin, CreditCard, Music, Activity, Gamepad2, Sparkles, PenTool, Smartphone, Info } from 'lucide-react';
 import AttachmentViewer from './AttachmentViewer';
 
 declare const window: Window & { openextract?: { openExternal?: (url: string) => void } };
@@ -10,31 +11,35 @@ interface Props {
   udid: string;
 }
 
-const SYSTEM_MESSAGE_LABELS: Record<string, (sender: string) => string> = {
-  location:                 ()       => '📍 Location shared',
-  location_started_by_me:   (sender) => `📍 You started sharing your location with ${sender}.`,
-  location_stopped_by_me:   (sender) => `📍 You stopped sharing your location with ${sender}.`,
-  location_started_by_them: (sender) => `📍 ${sender} started sharing their location with you.`,
-  location_stopped_by_them: (sender) => `📍 ${sender} stopped sharing their location with you.`,
-  payment:                  ()       => '💳 Apple Pay',
-  audio:                    ()       => '🎵 Audio message',
-  fitness:                  ()       => '🏃 Activity shared',
-  game:                     ()       => '🎮 Game Center',
-  digital_touch:            ()       => '✨ Digital Touch',
-  handwriting:              ()       => '✍️ Handwriting',
-  app:                      ()       => '📲 App interaction',
-  system:                   ()       => 'ℹ️ System message',
+const SYSTEM_MESSAGE_ICONS: Record<string, { icon: typeof MapPin; label: (sender: string) => string }> = {
+  location:                 { icon: MapPin,     label: ()       => 'Location shared' },
+  location_started_by_me:   { icon: MapPin,     label: (sender) => `You started sharing your location with ${sender}.` },
+  location_stopped_by_me:   { icon: MapPin,     label: (sender) => `You stopped sharing your location with ${sender}.` },
+  location_started_by_them: { icon: MapPin,     label: (sender) => `${sender} started sharing their location with you.` },
+  location_stopped_by_them: { icon: MapPin,     label: (sender) => `${sender} stopped sharing their location with you.` },
+  payment:                  { icon: CreditCard, label: ()       => 'Apple Pay' },
+  audio:                    { icon: Music,      label: ()       => 'Audio message' },
+  fitness:                  { icon: Activity,   label: ()       => 'Activity shared' },
+  game:                     { icon: Gamepad2,   label: ()       => 'Game Center' },
+  digital_touch:            { icon: Sparkles,   label: ()       => 'Digital Touch' },
+  handwriting:              { icon: PenTool,    label: ()       => 'Handwriting' },
+  app:                      { icon: Smartphone, label: ()       => 'App interaction' },
+  system:                   { icon: Info,       label: ()       => 'System message' },
 };
 
 function SystemMessageBanner({ message }: { message: Message }) {
   const [showTimestamp, setShowTimestamp] = useState(false);
-  const labelFn = SYSTEM_MESSAGE_LABELS[message.message_type];
-  const label = labelFn ? labelFn(message.sender) : 'ℹ️ System message';
+  const entry = SYSTEM_MESSAGE_ICONS[message.message_type];
+  const Icon = entry?.icon ?? Info;
+  const label = entry ? entry.label(message.sender) : 'System message';
   return (
     <div className="flex flex-col items-center my-2" onClick={() => setShowTimestamp(t => !t)}>
-      <span className="text-xs text-gray-400 italic cursor-pointer select-none">{label}</span>
+      <span className="inline-flex items-center gap-1.5 text-caption text-text-tertiary italic cursor-pointer select-none">
+        <Icon size={12} strokeWidth={1.5} />
+        {label}
+      </span>
       {showTimestamp && (
-        <span className="text-[10px] text-gray-400 mt-0.5">{formatDateTime(message.date)}</span>
+        <span className="text-[10px] text-text-tertiary mt-0.5">{formatDateTime(message.date)}</span>
       )}
     </div>
   );
@@ -55,41 +60,42 @@ function LinkPreviewBubble({ message }: { message: Message }) {
   return (
     <div className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'} mb-1`}>
       {!isFromMe && message.sender && (
-        <span className="text-xs text-gray-500 ml-3 mb-0.5">{message.sender}</span>
+        <span className="text-caption text-text-secondary ml-3 mb-0.5">{message.sender}</span>
       )}
       <div
         onClick={() => setShowTimestamp(t => !t)}
-        className={`max-w-[75%] rounded-2xl overflow-hidden cursor-pointer border ${
-          isFromMe ? 'border-blue-400 bg-imessage-blue text-white rounded-br-md' : 'border-gray-200 bg-bubble-gray text-gray-900 rounded-bl-md'
+        className={`max-w-[75%] rounded-2xl overflow-hidden cursor-pointer ${
+          isFromMe ? 'bg-imessage-blue text-white rounded-br-md' : 'bg-elevated text-text-primary rounded-bl-md'
         }`}
+        style={{ border: isFromMe ? '1px solid #007AFF' : '0.5px solid var(--border-default)' }}
       >
-        {/* Link card */}
         <div
-          className={`px-3 py-2 ${isFromMe ? 'border-t border-blue-400' : 'border-t border-gray-200'}`}
+          className="px-3 py-2"
+          style={{ borderTop: isFromMe ? '1px solid rgba(255,255,255,0.2)' : '0.5px solid var(--border-default)' }}
           onClick={(e) => { e.stopPropagation(); handleClick(); }}
         >
           {lp?.sitename && (
-            <p className={`text-[10px] uppercase tracking-wide mb-0.5 ${isFromMe ? 'text-blue-200' : 'text-gray-400'}`}>
+            <p className={`text-[10px] uppercase tracking-wide mb-0.5 ${isFromMe ? 'text-blue-200' : 'text-text-tertiary'}`}>
               {lp.sitename}
             </p>
           )}
           {lp?.title && (
-            <p className="text-sm font-semibold leading-snug">{lp.title}</p>
+            <p className="text-body font-semibold leading-snug">{lp.title}</p>
           )}
           {lp?.summary && (
-            <p className={`text-xs mt-0.5 line-clamp-2 ${isFromMe ? 'text-blue-100' : 'text-gray-500'}`}>
+            <p className={`text-caption mt-0.5 line-clamp-2 ${isFromMe ? 'text-blue-100' : 'text-text-secondary'}`}>
               {lp.summary}
             </p>
           )}
           {url && (
-            <p className={`text-[10px] mt-1 truncate ${isFromMe ? 'text-blue-200' : 'text-blue-500'}`}>
+            <p className={`text-[10px] mt-1 truncate ${isFromMe ? 'text-blue-200' : 'text-text-accent'}`}>
               {url}
             </p>
           )}
         </div>
       </div>
       {showTimestamp && (
-        <span className="text-[10px] text-gray-400 mt-0.5 mx-3">{formatDateTime(message.date)}</span>
+        <span className="text-[10px] text-text-tertiary mt-0.5 mx-3">{formatDateTime(message.date)}</span>
       )}
     </div>
   );
@@ -98,16 +104,13 @@ function LinkPreviewBubble({ message }: { message: Message }) {
 export default function ChatBubble({ message, udid }: Props) {
   const [showTimestamp, setShowTimestamp] = useState(false);
 
-  // Skip reaction messages in the main flow
   if (message.is_reaction) return null;
 
-  // Render link previews as positioned bubbles
   if (message.message_type === 'link') {
     return <LinkPreviewBubble message={message} />;
   }
 
-  // Render system/service messages as a centred banner
-  if (message.message_type && message.message_type in SYSTEM_MESSAGE_LABELS) {
+  if (message.message_type && message.message_type in SYSTEM_MESSAGE_ICONS) {
     return <SystemMessageBanner message={message} />;
   }
 
@@ -116,9 +119,8 @@ export default function ChatBubble({ message, udid }: Props) {
 
   return (
     <div className={`flex flex-col ${isFromMe ? 'items-end' : 'items-start'} mb-1`}>
-      {/* Sender name for received messages */}
       {!isFromMe && message.sender !== 'Unknown' && (
-        <span className="text-xs text-gray-500 ml-3 mb-0.5">
+        <span className="text-caption text-text-secondary ml-3 mb-0.5">
           {message.sender}
         </span>
       )}
@@ -127,11 +129,11 @@ export default function ChatBubble({ message, udid }: Props) {
         onClick={() => setShowTimestamp(!showTimestamp)}
         className={`max-w-[75%] px-3 py-2 rounded-2xl cursor-pointer select-text ${isFromMe
             ? 'bg-imessage-blue text-white rounded-br-md'
-            : 'bg-bubble-gray text-gray-900 rounded-bl-md'
+            : 'bg-elevated text-text-primary rounded-bl-md'
           }`}
       >
         {hasText && (
-          <p className="text-sm whitespace-pre-wrap break-words">{message.text}</p>
+          <p className="text-body whitespace-pre-wrap break-words">{message.text}</p>
         )}
 
         {message.has_attachments && message.attachments && (
@@ -143,13 +145,12 @@ export default function ChatBubble({ message, udid }: Props) {
         )}
 
         {!hasText && !message.has_attachments && (
-          <p className="text-sm italic opacity-50 select-none">···</p>
+          <p className="text-body italic opacity-50 select-none">&middot;&middot;&middot;</p>
         )}
       </div>
 
-      {/* Timestamp (shown on click) */}
       {showTimestamp && (
-        <span className="text-[10px] text-gray-400 mt-0.5 mx-3">
+        <span className="text-[10px] text-text-tertiary mt-0.5 mx-3">
           {formatDateTime(message.date)}
         </span>
       )}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Search, Loader2, AlertTriangle, FileText, Download } from 'lucide-react';
 import { BackupInfo } from '../../hooks/useBackup';
 import { sidecarCall, saveFolder } from '../../lib/ipc';
 
@@ -74,10 +75,10 @@ export default function NotesView({ backup }: Props) {
 
     if (loading) {
         return (
-            <div className="flex h-full items-center justify-center bg-gray-50">
-                <div className="text-gray-500 flex flex-col items-center">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    Loading notes...
+            <div className="flex h-full items-center justify-center bg-surface">
+                <div className="text-text-secondary flex flex-col items-center">
+                    <Loader2 className="w-8 h-8 text-text-accent animate-spin mb-4" />
+                    <span className="text-body">Loading notes...</span>
                 </div>
             </div>
         );
@@ -85,32 +86,34 @@ export default function NotesView({ backup }: Props) {
 
     if (error) {
         return (
-            <div className="flex h-full items-center justify-center bg-red-50 text-red-500">
+            <div className="flex h-full items-center justify-center bg-surface">
                 <div className="text-center">
-                    <p className="text-lg font-semibold mb-2">Error</p>
-                    <p>{error}</p>
+                    <AlertTriangle className="w-10 h-10 text-apple-error mx-auto mb-3" />
+                    <p className="text-subhead font-semibold text-apple-error mb-2">Error</p>
+                    <p className="text-body text-text-secondary">{error}</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="flex h-full bg-white text-gray-800">
+        <div className="flex h-full bg-base text-text-primary">
             {/* List Pane */}
-            <div className="w-80 border-r border-gray-200 flex flex-col bg-gray-50 flex-shrink-0">
+            <div className="w-80 flex flex-col bg-surface flex-shrink-0" style={{ borderRight: '0.5px solid var(--border-default)' }}>
                 {/* Header & Search */}
-                <div className="p-4 border-b border-gray-200 bg-white shadow-sm z-10">
-                    <h2 className="text-lg font-semibold mb-3">Notes ({filteredNotes.length})</h2>
+                <div className="p-4 bg-base shadow-subtle z-10" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+                    <h2 className="font-display text-title font-semibold text-text-primary mb-3">Notes ({filteredNotes.length})</h2>
                     <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                            🔍
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-text-tertiary">
+                            <Search className="w-4 h-4" />
                         </span>
                         <input
                             type="text"
                             placeholder="Search notes..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                            className="w-full pl-9 pr-3 py-2 rounded-lg text-body bg-elevated text-text-primary placeholder:text-text-tertiary focus:outline-none focus:shadow-focus transition-colors duration-200"
+                            style={{ border: '0.5px solid var(--border-default)' }}
                         />
                     </div>
                 </div>
@@ -118,31 +121,35 @@ export default function NotesView({ backup }: Props) {
                 {/* Note List */}
                 <div className="flex-1 overflow-y-auto">
                     {filteredNotes.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500 text-sm">
+                        <div className="p-8 text-center text-text-tertiary text-body">
                             No notes found.
                         </div>
                     ) : (
-                        <div className="divide-y divide-gray-100">
+                        <div>
                             {filteredNotes.map((note) => (
                                 <div
                                     key={note.note_id}
                                     onClick={() => setSelectedNoteId(note.note_id)}
-                                    className={`p-4 cursor-pointer hover:bg-white transition-colors block border-l-4 ${selectedNoteId === note.note_id
-                                            ? 'bg-white border-blue-500 shadow-sm'
-                                            : 'border-transparent'
+                                    className={`p-4 cursor-pointer transition-colors duration-200 ${selectedNoteId === note.note_id
+                                            ? 'bg-accent-subtle shadow-subtle'
+                                            : 'hover:bg-elevated'
                                         }`}
+                                    style={{
+                                        borderLeft: selectedNoteId === note.note_id ? '2px solid var(--accent)' : '2px solid transparent',
+                                        borderBottom: '0.5px solid var(--border-subtle)',
+                                    }}
                                 >
-                                    <h3 className="font-semibold text-gray-900 truncate tracking-tight mb-1">
+                                    <h3 className="font-semibold text-text-primary truncate tracking-tight mb-1 text-body">
                                         {note.title}
                                     </h3>
                                     <div className="flex justify-between items-baseline mb-1">
-                                        <p className="text-xs text-blue-600 font-medium tracking-wide">
+                                        <p className="text-caption text-text-accent font-medium tracking-wide">
                                             {new Date(note.modified).toLocaleDateString(undefined, {
                                                 month: 'short', day: 'numeric', year: 'numeric'
                                             })}
                                         </p>
                                     </div>
-                                    <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed">
+                                    <p className="text-body text-text-secondary line-clamp-2 leading-relaxed">
                                         {note.body}
                                     </p>
                                 </div>
@@ -153,27 +160,30 @@ export default function NotesView({ backup }: Props) {
             </div>
 
             {/* Detail Pane */}
-            <div className="flex-1 flex flex-col bg-white">
+            <div className="flex-1 flex flex-col bg-base">
                 {selectedNote ? (
                     <>
                         {/* Toolbar */}
-                        <div className="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-gray-50/50">
-                            <div className="text-sm text-gray-500">
+                        <div className="h-14 flex items-center justify-between px-6 bg-surface" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+                            <div className="text-caption text-text-secondary">
                                 Created: {new Date(selectedNote.created).toLocaleString()}
                             </div>
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => handleExport('txt')}
                                     disabled={exporting}
-                                    className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm disabled:opacity-50"
+                                    className="px-3 py-1.5 bg-elevated text-text-primary rounded-lg text-body font-medium hover:bg-surface transition-colors duration-200 shadow-subtle disabled:opacity-50 flex items-center gap-1.5"
+                                    style={{ border: '0.5px solid var(--border-default)' }}
                                 >
+                                    <Download className="w-3.5 h-3.5" />
                                     Export TXT
                                 </button>
                                 <button
                                     onClick={() => handleExport('pdf')}
                                     disabled={exporting}
-                                    className="px-3 py-1.5 bg-blue-600 border border-transparent text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                                    className="px-3 py-1.5 bg-accent text-white rounded-lg text-body font-medium hover:bg-accent-hover transition-colors duration-200 shadow-subtle disabled:opacity-50 flex items-center gap-1.5"
                                 >
+                                    <Download className="w-3.5 h-3.5" />
                                     Export PDF
                                 </button>
                             </div>
@@ -182,20 +192,20 @@ export default function NotesView({ backup }: Props) {
                         {/* Note Content */}
                         <div className="flex-1 overflow-y-auto px-12 py-10">
                             <div className="max-w-3xl mx-auto">
-                                <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-4 pb-4 border-b border-gray-100">
+                                <h1 className="text-3xl font-display font-bold text-text-primary tracking-tight mb-4 pb-4" style={{ borderBottom: '0.5px solid var(--border-subtle)' }}>
                                     {selectedNote.title}
                                 </h1>
-                                <div className="prose prose-blue max-w-none text-gray-700 leading-relaxed font-serif text-[1.05rem] whitespace-pre-wrap">
+                                <div className="prose prose-blue max-w-none text-text-secondary leading-relaxed font-serif text-[1.05rem] whitespace-pre-wrap">
                                     {selectedNote.body}
                                 </div>
                             </div>
                         </div>
                     </>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50/30">
+                    <div className="flex-1 flex items-center justify-center text-text-tertiary bg-surface">
                         <div className="text-center">
-                            <div className="text-6xl mb-4 opacity-50">📝</div>
-                            <p className="text-lg font-medium text-gray-500">Select a note to view</p>
+                            <FileText className="w-16 h-16 mx-auto mb-4 opacity-40" />
+                            <p className="text-subhead font-medium text-text-secondary">Select a note to view</p>
                         </div>
                     </div>
                 )}

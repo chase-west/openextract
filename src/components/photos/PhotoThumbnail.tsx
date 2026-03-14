@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, memo } from 'react';
+import { Play, AlertTriangle, Image, Star, Loader2 } from 'lucide-react';
 import { PhotoAsset } from '../../types';
 
 interface Props {
@@ -56,7 +57,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     <div
       ref={containerRef}
       onClick={onClick}
-      className="relative cursor-pointer rounded overflow-hidden bg-gray-800 group select-none"
+      className="relative cursor-pointer rounded-lg overflow-hidden bg-gray-800 group select-none"
       style={{ aspectRatio: '1' }}
     >
       {src ? (
@@ -67,15 +68,15 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
           draggable={false}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-gray-600">
+        <div className="w-full h-full flex items-center justify-center text-text-tertiary">
           {loading ? (
-            <div className="w-5 h-5 border-2 border-gray-600 border-t-blue-400 rounded-full animate-spin" />
+            <Loader2 className="w-5 h-5 animate-spin text-accent" />
           ) : skipThumbnail ? (
-            <span className="text-3xl opacity-40">▶</span>
+            <Play className="w-8 h-8 opacity-40" />
           ) : hasError ? (
-            <span className="text-xl opacity-30" title={`Could not load: ${photo.filename}`}>⚠️</span>
+            <AlertTriangle className="w-5 h-5 opacity-30" title={`Could not load: ${photo.filename}`} />
           ) : (
-            <span className="text-xl opacity-40">🖼</span>
+            <Image className="w-5 h-5 opacity-40" />
           )}
         </div>
       )}
@@ -84,15 +85,15 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
       <div className="absolute inset-0 flex flex-col justify-end p-1 pointer-events-none">
         <div className="flex items-end justify-between">
           {photo.favorite && (
-            <span className="text-yellow-400 text-xs leading-none drop-shadow">★</span>
+            <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400 drop-shadow" />
           )}
           {isVideo && (
-            <span className="ml-auto bg-black/65 text-white text-[10px] px-1 py-0.5 rounded leading-none">
-              {photo.duration > 0 ? formatDuration(photo.duration) : '▶'}
+            <span className="ml-auto bg-black/65 text-white text-caption px-1 py-0.5 rounded leading-none inline-flex items-center gap-0.5">
+              {photo.duration > 0 ? formatDuration(photo.duration) : <Play className="w-2.5 h-2.5" />}
             </span>
           )}
           {isLive && !isVideo && (
-            <span className="ml-auto bg-black/65 text-white text-[10px] px-1 py-0.5 rounded leading-none">
+            <span className="ml-auto bg-black/65 text-white text-caption px-1 py-0.5 rounded leading-none font-medium">
               LIVE
             </span>
           )}

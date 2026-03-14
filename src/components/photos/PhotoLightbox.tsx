@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { X, ChevronLeft, ChevronRight, AlertTriangle, Star, Info, Loader2 } from 'lucide-react';
 import { PhotoAsset, FullPhotoResult } from '../../types';
 
 interface Props {
@@ -11,8 +12,8 @@ interface Props {
 function MetaRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="mb-3">
-      <p className="text-gray-500 text-[11px] uppercase tracking-wider">{label}</p>
-      <p className="text-gray-200 text-xs break-all mt-0.5">{value}</p>
+      <p className="text-text-tertiary text-caption uppercase tracking-wider">{label}</p>
+      <p className="text-text-primary text-caption break-all mt-0.5">{value}</p>
     </div>
   );
 }
@@ -61,25 +62,27 @@ export default function PhotoLightbox({ photos, initialIndex, getFullPhoto, onCl
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
       {/* Header bar */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-800 flex-shrink-0 bg-gray-950">
+      <div className="flex items-center gap-3 px-4 py-2 flex-shrink-0 bg-gray-950" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-white text-sm transition-colors"
+          className="text-text-tertiary hover:text-text-primary transition-colors focus:outline-none focus:shadow-focus rounded-md p-0.5"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
-        <span className="text-gray-300 text-sm truncate flex-1">{photo.filename}</span>
-        <span className="text-gray-600 text-xs flex-shrink-0">
+        <span className="text-text-secondary text-body truncate flex-1">{photo.filename}</span>
+        <span className="text-text-tertiary text-caption flex-shrink-0">
           {index + 1} / {photos.length}
         </span>
         <button
           onClick={() => setShowMeta(m => !m)}
-          className={`text-xs px-2 py-1 rounded border transition-colors ${
+          className={`text-caption px-2 py-1 rounded-lg transition-colors focus:outline-none focus:shadow-focus inline-flex items-center gap-1 ${
             showMeta
-              ? 'border-blue-500 text-blue-400'
-              : 'border-gray-700 text-gray-400 hover:text-white'
+              ? 'bg-accent text-white'
+              : 'text-text-tertiary hover:text-text-primary'
           }`}
+          style={showMeta ? undefined : { border: '0.5px solid var(--border-default)' }}
         >
+          <Info className="w-3 h-3" />
           Info
         </button>
       </div>
@@ -92,9 +95,9 @@ export default function PhotoLightbox({ photos, initialIndex, getFullPhoto, onCl
           {index > 0 && (
             <button
               onClick={prev}
-              className="absolute left-3 z-10 bg-black/50 hover:bg-black/80 text-white w-9 h-9 rounded-full flex items-center justify-center text-xl transition-colors"
+              className="absolute left-3 z-10 bg-black/50 hover:bg-black/80 text-white w-9 h-9 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:shadow-focus"
             >
-              ‹
+              <ChevronLeft className="w-5 h-5" />
             </button>
           )}
 
@@ -102,19 +105,19 @@ export default function PhotoLightbox({ photos, initialIndex, getFullPhoto, onCl
           {index < photos.length - 1 && (
             <button
               onClick={next}
-              className="absolute right-3 z-10 bg-black/50 hover:bg-black/80 text-white w-9 h-9 rounded-full flex items-center justify-center text-xl transition-colors"
+              className="absolute right-3 z-10 bg-black/50 hover:bg-black/80 text-white w-9 h-9 rounded-full flex items-center justify-center transition-colors focus:outline-none focus:shadow-focus"
             >
-              ›
+              <ChevronRight className="w-5 h-5" />
             </button>
           )}
 
           {fetching ? (
-            <div className="w-10 h-10 border-2 border-gray-700 border-t-blue-400 rounded-full animate-spin" />
+            <Loader2 className="w-10 h-10 animate-spin text-accent" />
           ) : photoData?.error ? (
-            <div className="text-gray-500 text-sm text-center">
-              <p className="text-2xl mb-2">⚠️</p>
+            <div className="text-text-tertiary text-body text-center">
+              <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-yellow-500" />
               <p>Failed to load photo</p>
-              <p className="text-xs mt-1 text-gray-600">{photoData.error}</p>
+              <p className="text-caption mt-1 text-text-tertiary">{photoData.error}</p>
             </div>
           ) : dataSrc ? (
             isVideo ? (
@@ -139,8 +142,8 @@ export default function PhotoLightbox({ photos, initialIndex, getFullPhoto, onCl
 
         {/* Metadata panel */}
         {showMeta && (
-          <aside className="w-60 flex-shrink-0 border-l border-gray-800 bg-gray-950 overflow-y-auto p-4">
-            <p className="text-gray-500 text-[11px] uppercase tracking-wider mb-3">Details</p>
+          <aside className="w-60 flex-shrink-0 bg-gray-950 overflow-y-auto p-4" style={{ borderLeft: '0.5px solid var(--border-default)' }}>
+            <p className="text-text-tertiary text-caption uppercase tracking-wider mb-3">Details</p>
             <MetaRow label="Filename" value={photo.filename} />
             <MetaRow label="Type" value={photo.kind} />
             {photo.date_created && (
@@ -150,7 +153,7 @@ export default function PhotoLightbox({ photos, initialIndex, getFullPhoto, onCl
               <MetaRow label="Modified" value={new Date(photo.date_modified).toLocaleString()} />
             )}
             {photo.width > 0 && (
-              <MetaRow label="Dimensions" value={`${photo.width} × ${photo.height}`} />
+              <MetaRow label="Dimensions" value={`${photo.width} x ${photo.height}`} />
             )}
             {photo.duration > 0 && (
               <MetaRow label="Duration" value={`${photo.duration.toFixed(1)}s`} />
@@ -161,7 +164,14 @@ export default function PhotoLightbox({ photos, initialIndex, getFullPhoto, onCl
                 value={`${photo.latitude.toFixed(5)}, ${photo.longitude.toFixed(5)}`}
               />
             )}
-            {photo.favorite && <MetaRow label="Favourite" value="Yes ★" />}
+            {photo.favorite && (
+              <div className="mb-3">
+                <p className="text-text-tertiary text-caption uppercase tracking-wider">Favourite</p>
+                <p className="text-text-primary text-caption mt-0.5 inline-flex items-center gap-1">
+                  Yes <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                </p>
+              </div>
+            )}
             {photo.has_adjustments && <MetaRow label="Edited" value="Yes" />}
             {photo.burst_uuid && <MetaRow label="Burst" value="Yes" />}
             {photo.hidden && <MetaRow label="Hidden" value="Yes" />}

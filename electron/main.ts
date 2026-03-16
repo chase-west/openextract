@@ -69,6 +69,17 @@ function getPythonArgs(): string[] {
 app.whenReady().then(async () => {
   // Start the Python sidecar
   sidecar = new PythonSidecar(getPythonPath(), getPythonArgs());
+
+  // Forward JSON-RPC notifications from the sidecar to the renderer.
+  // The sidecar sends notifications (no id field) during long-running
+  // operations such as backup.start — this pipes them through to the
+  // renderer via the 'sidecar:notification' IPC channel.
+  sidecar.notificationHandler = (notification: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sidecar:notification', notification);
+    }
+  };
+
   try {
     await sidecar.start();
     console.log('Python sidecar started');
@@ -81,10 +92,27 @@ app.whenReady().then(async () => {
   // Bridge IPC: renderer -> Python sidecar
   ipcMain.handle('sidecar:call', async (_event: any, method: string, params: any) => {
     try {
-      const result = await sidecar.call(method, params);
+      // Backup operations can take hours on large devices — use a much longer timeout.
+      const timeoutMs = method === 'backup.start' ? 7_200_000 : undefined; // 2 hours
+      const result = await sidecar.call(method, params, timeoutMs);
+      // Log open_backup results so failures are visible in python_log.txt
+      if (method === 'open_backup') {
+        const fs = require('fs');
+        const ts = new Date().toTimeString().slice(0, 8);
+        const status = (result as any)?.status ?? 'unknown';
+        fs.appendFileSync('python_log.txt',
+          `[${ts}] [Electron] open_backup → status=${status} udid=${params?.udid} dir=${params?.backup_dir}\n`);
+      }
       return { success: true, data: result };
     } catch (error: any) {
       console.error(`Sidecar call failed: ${method}`, error);
+      // Always log open_backup failures to python_log.txt
+      if (method === 'open_backup') {
+        const fs = require('fs');
+        const ts = new Date().toTimeString().slice(0, 8);
+        fs.appendFileSync('python_log.txt',
+          `[${ts}] [Electron] open_backup FAILED: ${error.message} | udid=${params?.udid} dir=${params?.backup_dir}\n`);
+      }
       return { success: false, error: error.message };
     }
   });

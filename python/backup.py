@@ -299,6 +299,18 @@ class BackupManager:
                     "product_type": "Unknown",
                     "product_version": "Unknown",
                 }
+        else:
+            # No Info.plist — still provide the required fields so the rest of the
+            # code (open_backup, dashboard) doesn't crash on missing keys.
+            info = {
+                "udid": os.path.basename(backup_dir),
+                "device_name": "Unknown",
+                "product_type": "Unknown",
+                "product_version": "Unknown",
+                "serial_number": "",
+                "phone_number": "",
+                "last_backup": "",
+            }
 
         # Read Manifest.plist for encryption status
         encrypted = False
@@ -319,6 +331,11 @@ class BackupManager:
 
         return info
 
+    @staticmethod
+    def _norm_udid(udid: str) -> str:
+        """Normalise a UDID for comparison: strip dashes, lowercase."""
+        return udid.replace("-", "").lower()
+
     def open_backup(self, udid: str, password: Optional[str] = None,
                     backup_dir: Optional[str] = None) -> dict:
         """
@@ -326,24 +343,68 @@ class BackupManager:
         Accepts an optional backup_dir to skip re-scanning — important when the
         backup was found via a custom/browse path or a non-default location.
         """
+        _tlog(f"open_backup called: udid={udid!r} backup_dir={backup_dir!r}")
         backup_info = None
+        norm_udid = self._norm_udid(udid)
 
-        # Fast path: use the provided directory directly
+        # Fast path: use the provided directory directly.
+        # When backup_dir is explicitly supplied (e.g. immediately after
+        # creating a backup), trust it unconditionally — do NOT reject on a
+        # UDID mismatch because pymobiledevice3 may format UDIDs differently
+        # from what iTunes writes into Info.plist.
         if backup_dir and os.path.isdir(backup_dir):
+            _tlog(f"open_backup fast-path: dir exists, reading backup info")
             backup_info = self._read_backup_info(backup_dir)
-            if not backup_info or backup_info.get("udid") != udid:
-                backup_info = None  # directory doesn't match — fall through to scan
+            _tlog(f"open_backup fast-path: _read_backup_info returned {'OK' if backup_info else 'None'}")
+
+            if not backup_info:
+                # _resolve_backup_path in device_backup should have already resolved
+                # the correct directory, but as a safety net scan one level deep.
+                try:
+                    subdirs = [e.name for e in os.scandir(backup_dir) if e.is_dir()]
+                    _tlog(f"open_backup fast-path fallback scan: subdirs={subdirs!r}")
+                    for entry in os.scandir(backup_dir):
+                        if entry.is_dir():
+                            backup_info = self._read_backup_info(entry.path)
+                            if backup_info:
+                                _tlog(f"open_backup fast-path fallback: found in subdir {entry.name!r}")
+                                break
+                except Exception as exc:
+                    _tlog(f"open_backup fast-path fallback scan error: {exc}")
+
+            if backup_info:
+                _tlog(
+                    f"open_backup fast-path OK: dir={backup_dir!r} "
+                    f"udid_param={udid!r} udid_plist={backup_info.get('udid')!r}"
+                )
+            else:
+                _tlog(
+                    f"open_backup fast-path MISS: dir={backup_dir!r} "
+                    f"udid_param={udid!r} — no Manifest.db found at this path or one level deep"
+                )
+        elif backup_dir:
+            _tlog(f"open_backup: backup_dir supplied but is not a directory: {backup_dir!r}")
 
         # Slow path: scan all default locations
         if not backup_info:
+            _tlog(f"open_backup slow-path: scanning default backup locations for udid={udid!r}")
             all_backups = self.list_backups()
+            _tlog(f"open_backup slow-path: found {len(all_backups['backups'])} backup(s) in default dirs")
             for b in all_backups["backups"]:
-                if b["udid"] == udid:
+                if self._norm_udid(b["udid"]) == norm_udid:
                     backup_info = b
+                    _tlog(f"open_backup slow-path: matched udid in {b['backup_dir']!r}")
                     break
 
         if not backup_info:
+            _tlog(f"open_backup FAILED: backup not found for udid={udid!r} backup_dir={backup_dir!r}")
             raise ValueError(f"Backup not found: {udid}")
+
+        # Ensure udid is always present — _read_backup_info falls back to the
+        # directory name when Info.plist is absent, but guard here as well.
+        if not backup_info.get("udid"):
+            _tlog(f"open_backup: backup_info missing udid, filling from param: {udid!r}")
+            backup_info["udid"] = udid
 
         backup_dir = backup_info["backup_dir"]
         encrypted = backup_info["encrypted"]
@@ -376,7 +437,7 @@ class BackupManager:
             decrypted_backup=decrypted_backup,
         )
 
-        self._open_backups[udid] = backup
+        self._open_backups[self._norm_udid(backup_info["udid"])] = backup
 
         # For encrypted backups, pre-decrypt the most-accessed files now so that
         # list_conversations / get_messages don't stall on first use.
@@ -389,6 +450,7 @@ class BackupManager:
                 _tlog(f"open_backup prewarm {path}: {time.perf_counter()-t_f:.3f}s {'OK' if result else 'MISSING'}")
             _tlog(f"open_backup prewarm total={time.perf_counter()-t_pw:.3f}s")
 
+        _tlog(f"open_backup SUCCESS: udid={udid!r} backup_dir={backup_dir!r} encrypted={encrypted}")
         return {
             "status": "open",
             "info": backup_info,
@@ -438,6 +500,7 @@ class BackupManager:
 
     def get_open_backup(self, udid: str) -> OpenBackup:
         """Get an already-opened backup by UDID."""
-        if udid not in self._open_backups:
+        key = self._norm_udid(udid)
+        if key not in self._open_backups:
             raise ValueError(f"Backup not open: {udid}. Call open_backup first.")
-        return self._open_backups[udid]
+        return self._open_backups[key]

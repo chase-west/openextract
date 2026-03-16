@@ -65,6 +65,15 @@ function getPythonArgs() {
 app.whenReady().then(async () => {
     // Start the Python sidecar
     sidecar = new sidecar_1.PythonSidecar(getPythonPath(), getPythonArgs());
+    // Forward JSON-RPC notifications from the sidecar to the renderer.
+    // The sidecar sends notifications (no id field) during long-running
+    // operations such as backup.start — this pipes them through to the
+    // renderer via the 'sidecar:notification' IPC channel.
+    sidecar.notificationHandler = (notification) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('sidecar:notification', notification);
+        }
+    };
     try {
         await sidecar.start();
         console.log('Python sidecar started');
@@ -76,7 +85,9 @@ app.whenReady().then(async () => {
     // Bridge IPC: renderer -> Python sidecar
     ipcMain.handle('sidecar:call', async (_event, method, params) => {
         try {
-            const result = await sidecar.call(method, params);
+            // Backup operations can take hours on large devices — use a much longer timeout.
+            const timeoutMs = method === 'backup.start' ? 7200000 : undefined; // 2 hours
+            const result = await sidecar.call(method, params, timeoutMs);
             return { success: true, data: result };
         }
         catch (error) {

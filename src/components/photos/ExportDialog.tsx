@@ -38,7 +38,7 @@ function StyledSelect({
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full bg-gray-800 text-text-primary text-body px-3 py-1.5 rounded-lg focus:outline-none focus:shadow-focus"
+      className="w-full bg-surface text-text-primary text-body px-3 py-1.5 rounded-lg focus:outline-none focus:shadow-focus"
       style={{ border: '0.5px solid var(--border-default)' }}
     >
       {children}
@@ -103,7 +103,7 @@ export default function ExportDialog({ onClose, onExport }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-      <div className="bg-gray-900 rounded-xl w-full max-w-md shadow-2xl" style={{ border: '0.5px solid var(--border-default)' }}>
+      <div className="bg-elevated rounded-xl w-full max-w-md shadow-2xl" style={{ border: '0.5px solid var(--border-default)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
           <h2 className="text-text-primary font-medium text-subhead">Export Photos</h2>
@@ -139,12 +139,12 @@ export default function ExportDialog({ onClose, onExport }: Props) {
                   readOnly
                   value={outputDir}
                   placeholder="Choose a destination folder..."
-                  className="flex-1 bg-gray-800 text-text-secondary text-body px-3 py-1.5 rounded-lg placeholder:text-text-tertiary focus:outline-none"
+                  className="flex-1 bg-surface text-text-secondary text-body px-3 py-1.5 rounded-lg placeholder:text-text-tertiary focus:outline-none"
                   style={{ border: '0.5px solid var(--border-default)' }}
                 />
                 <button
                   onClick={pickFolder}
-                  className="bg-gray-700 hover:bg-gray-600 text-text-primary text-body px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 focus:outline-none focus:shadow-focus inline-flex items-center gap-1.5"
+                  className="bg-surface hover:bg-base text-text-primary text-body px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 focus:outline-none focus:shadow-focus inline-flex items-center gap-1.5"
                   style={{ border: '0.5px solid var(--border-default)' }}
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
@@ -222,7 +222,7 @@ export default function ExportDialog({ onClose, onExport }: Props) {
 
             {/* Error */}
             {exportError && (
-              <p className="text-red-400 text-body bg-red-900/30 rounded-lg px-3 py-2" style={{ border: '0.5px solid var(--border-danger)' }}>
+              <p className="text-red-700 text-body bg-red-50 rounded-lg px-3 py-2" style={{ border: '0.5px solid var(--border-danger)' }}>
                 {exportError}
               </p>
             )}

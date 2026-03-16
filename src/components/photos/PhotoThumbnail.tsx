@@ -57,7 +57,7 @@ const PhotoThumbnail = memo(function PhotoThumbnail({
     <div
       ref={containerRef}
       onClick={onClick}
-      className="relative cursor-pointer rounded-lg overflow-hidden bg-gray-800 group select-none"
+      className="relative cursor-pointer rounded-lg overflow-hidden bg-surface group select-none"
       style={{ aspectRatio: '1' }}
     >
       {src ? (

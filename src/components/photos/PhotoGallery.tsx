@@ -55,7 +55,7 @@ export default function PhotoGallery({ backup }: Props) {
   }, [selectedAlbum, selectAlbum]);
 
   return (
-    <div className="flex h-full bg-gray-900 text-text-primary overflow-hidden">
+    <div className="flex h-full bg-base text-text-primary overflow-hidden">
       {/* Album sidebar */}
       <aside className="w-52 flex-shrink-0 flex flex-col overflow-hidden" style={{ borderRight: '0.5px solid var(--border-default)' }}>
         <p className="text-caption uppercase tracking-wider text-text-tertiary px-3 pt-3 pb-1 flex-shrink-0">
@@ -71,7 +71,7 @@ export default function PhotoGallery({ backup }: Props) {
                 className={`w-full text-left px-3 py-1.5 text-body flex items-center justify-between gap-2 transition-colors focus:outline-none focus:shadow-focus ${
                   active
                     ? 'bg-accent text-white'
-                    : 'text-text-secondary hover:bg-gray-800'
+                    : 'text-text-secondary hover:bg-surface'
                 }`}
               >
                 <span className="truncate flex-1">{album.title}</span>
@@ -87,7 +87,7 @@ export default function PhotoGallery({ backup }: Props) {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-gray-900" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
+        <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0 bg-base" style={{ borderBottom: '0.5px solid var(--border-default)' }}>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary pointer-events-none" />
             <input
@@ -95,14 +95,14 @@ export default function PhotoGallery({ backup }: Props) {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search filename..."
-              className="bg-gray-800 text-text-primary text-body pl-8 pr-3 py-1.5 rounded-lg w-44 focus:outline-none focus:shadow-focus placeholder:text-text-tertiary"
+              className="bg-surface text-text-primary text-body pl-8 pr-3 py-1.5 rounded-lg w-44 focus:outline-none focus:shadow-focus placeholder:text-text-tertiary"
               style={{ border: '0.5px solid var(--border-default)' }}
             />
           </div>
           <select
             value={kindFilter}
             onChange={e => setKindFilter(e.target.value)}
-            className="bg-gray-800 text-text-primary text-body px-2 py-1.5 rounded-lg focus:outline-none focus:shadow-focus"
+            className="bg-surface text-text-primary text-body px-2 py-1.5 rounded-lg focus:outline-none focus:shadow-focus"
             style={{ border: '0.5px solid var(--border-default)' }}
           >
             {KIND_OPTIONS.map(o => (
@@ -124,7 +124,7 @@ export default function PhotoGallery({ backup }: Props) {
 
         {/* Error banner */}
         {error && (
-          <div className="mx-3 mt-2 px-3 py-2 bg-red-900/40 rounded-lg text-body text-red-300 flex-shrink-0" style={{ border: '0.5px solid var(--border-danger)' }}>
+          <div className="mx-3 mt-2 px-3 py-2 bg-red-50 rounded-lg text-body text-red-700 flex-shrink-0" style={{ border: '0.5px solid var(--border-danger)' }}>
             {error}
           </div>
         )}

@@ -16,6 +16,16 @@ def _tlog(msg: str) -> None:
         pass
 
 
+def resolve_contact(identifier: str, contacts: dict) -> str:
+    """Look up a display name for a phone/email identifier with normalization fallback."""
+    if identifier in contacts:
+        return contacts[identifier]
+    normalized = ContactResolver.normalize_phone(identifier)
+    if normalized and normalized in contacts:
+        return contacts[normalized]
+    return ""
+
+
 class ContactResolver:
     """Resolves phone numbers and emails to contact names."""
 
@@ -23,6 +33,13 @@ class ContactResolver:
 
     def __init__(self):
         self._cache: dict[str, dict] = {}  # keyed by backup udid
+
+    def clear_cache(self, udid: str | None = None):
+        """Clear cached contacts for a specific backup (or all)."""
+        if udid:
+            self._cache.pop(udid, None)
+        else:
+            self._cache.clear()
 
     @staticmethod
     def normalize_phone(phone: str) -> str:

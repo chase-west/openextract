@@ -10,16 +10,18 @@ interface Props {
   error: string | null;
   onRefresh: (path?: string) => Promise<void>;
   onOpen: (udid: string, password?: string, backupDir?: string) => Promise<string>;
+  onValidatePassword: (udid: string, password: string, backupDir?: string) => Promise<{ valid: boolean; error?: string }>;
   onCreateBackup: () => void;
 }
 
-export default function BackupSelector({ backups, loading, error, onRefresh, onOpen, onCreateBackup }: Props) {
+export default function BackupSelector({ backups, loading, error, onRefresh, onOpen, onValidatePassword, onCreateBackup }: Props) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [pendingBackup, setPendingBackup] = useState<BackupInfo | null>(null);
   const [pendingBackupDir, setPendingBackupDir] = useState<string | undefined>(undefined);
   const [openError, setOpenError] = useState<string | null>(null);
   const [decrypting, setDecrypting] = useState(false);
+  const [validating, setValidating] = useState(false);
 
   useEffect(() => {
     onRefresh();
@@ -41,11 +43,22 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
   const handlePasswordSubmit = async () => {
     if (!pendingBackup || !password) return;
     setOpenError(null);
+
+    // Fast password check before showing progress UI
+    setValidating(true);
+    const validation = await onValidatePassword(pendingBackup.udid, password, pendingBackupDir);
+    setValidating(false);
+    if (!validation.valid) {
+      setOpenError('Incorrect password.');
+      return;
+    }
+
+    // Password confirmed — now show decrypting progress and open
     setDecrypting(true);
     const status = await onOpen(pendingBackup.udid, password, pendingBackupDir);
     setDecrypting(false);
     if (status.startsWith('error:')) {
-      setOpenError('Incorrect password or corrupted backup');
+      setOpenError(status.slice(6) || 'Failed to open backup');
     } else if (status === 'open') {
       setPendingBackup(null);
       setPassword('');
@@ -126,42 +139,51 @@ export default function BackupSelector({ backups, loading, error, onRefresh, onO
         {/* Password prompt */}
         {pendingBackup && !decrypting && (
           <div className="mb-6 p-4 bg-accent-subtle rounded-lg" style={{ border: '0.5px solid var(--border-default)' }}>
-            <p className="text-body font-medium text-text-primary mb-3">
-              This backup is encrypted. Enter your backup password:
-            </p>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
-                  placeholder="Backup password"
-                  className="w-full px-3 py-2 bg-base text-body text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus"
-                  style={{ border: '0.5px solid var(--border-strong)' }}
-                  autoFocus
-                />
-                <button
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-caption text-text-tertiary hover:text-text-secondary transition-colors"
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
+            {validating ? (
+              <div className="flex items-center gap-3">
+                <Loader2 size={20} strokeWidth={2} className="animate-spin text-text-accent flex-shrink-0" />
+                <p className="text-body font-medium text-text-primary">Checking encryption…</p>
               </div>
-              <button
-                onClick={handlePasswordSubmit}
-                disabled={!password || loading}
-                className="px-4 py-2 bg-accent text-white rounded-lg text-body font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
-              >
-                Unlock
-              </button>
-              <button
-                onClick={() => { setPendingBackup(null); setPassword(''); setPendingBackupDir(undefined); }}
-                className="px-3 py-2 text-text-secondary text-body hover:text-text-primary transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
+            ) : (
+              <>
+                <p className="text-body font-medium text-text-primary mb-3">
+                  This backup is encrypted. Enter your backup password:
+                </p>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                      placeholder="Backup password"
+                      className="w-full px-3 py-2 bg-base text-body text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus"
+                      style={{ border: '0.5px solid var(--border-strong)' }}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-caption text-text-tertiary hover:text-text-secondary transition-colors"
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <button
+                    onClick={handlePasswordSubmit}
+                    disabled={!password || loading}
+                    className="px-4 py-2 bg-accent text-white rounded-lg text-body font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors"
+                  >
+                    Unlock
+                  </button>
+                  <button
+                    onClick={() => { setPendingBackup(null); setPassword(''); setPendingBackupDir(undefined); }}
+                    className="px-3 py-2 text-text-secondary text-body hover:text-text-primary transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
             <p className="text-caption text-text-tertiary mt-2">
               This is the password you set when enabling encrypted backups in iTunes/Finder.
             </p>

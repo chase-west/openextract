@@ -12,6 +12,8 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from contacts import resolve_contact
+
 
 def _tlog(msg: str) -> None:
     try:
@@ -412,8 +414,8 @@ class MessageExtractor:
                 display_name = row["display_name"] or ""
 
                 # Resolve contact name
-                if not display_name and chat_identifier in contacts:
-                    display_name = contacts[chat_identifier]
+                if not display_name:
+                    display_name = resolve_contact(chat_identifier, contacts)
 
                 conversations.append({
                     "chat_id": row["chat_id"],
@@ -576,16 +578,16 @@ class MessageExtractor:
                 LIMIT 1
             """, (chat_id,)).fetchone()
             if chat_handle_row:
-                chat_contact_name = contacts.get(chat_handle_row[0], chat_handle_row[0])
+                chat_contact_name = resolve_contact(chat_handle_row[0], contacts) or chat_handle_row[0]
 
             t_loop = time.perf_counter()
             for row in rows:
                 handle = row["handle_id_str"] or ""
-                sender_name = handle
-                if handle in contacts:
-                    sender_name = contacts[handle]
-                elif has_uncanonicalized and row["uncanonicalized_id"] and row["uncanonicalized_id"] in contacts:
-                    sender_name = contacts[row["uncanonicalized_id"]]
+                sender_name = resolve_contact(handle, contacts) if handle else ""
+                if not sender_name and has_uncanonicalized and row["uncanonicalized_id"]:
+                    sender_name = resolve_contact(row["uncanonicalized_id"], contacts)
+                if not sender_name:
+                    sender_name = handle
                 # Fall back to the chat's primary contact for handle-less system messages
                 if not sender_name:
                     sender_name = chat_contact_name
@@ -853,7 +855,7 @@ class MessageExtractor:
                     "text": row["text"],
                     "date": apple_date_to_iso(row["date"]),
                     "is_from_me": bool(row["is_from_me"]),
-                    "sender": "me" if row["is_from_me"] else contacts.get(handle, handle),
+                    "sender": "me" if row["is_from_me"] else (resolve_contact(handle, contacts) or handle),
                     "chat_id": row["chat_id"],
                 })
         except Exception:

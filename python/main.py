@@ -99,12 +99,15 @@ class SidecarServer:
         udid = params["udid"]
         password = params.get("password")
         backup_dir = params.get("backup_dir")
+        # Clear cached contacts so they are reloaded from the (re)opened backup
+        self.contact_resolver.clear_cache(udid)
         return self.backup_manager.open_backup(udid, password=password, backup_dir=backup_dir)
 
     def validate_password(self, params):
         udid = params["udid"]
         password = params["password"]
-        return self.backup_manager.validate_password(udid, password)
+        backup_dir = params.get("backup_dir")
+        return self.backup_manager.validate_password(udid, password, backup_dir=backup_dir)
 
     def get_backup_size(self, params):
         backup_dir = params["backup_dir"]

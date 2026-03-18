@@ -426,6 +426,12 @@ class BackupManager:
                     backup_directory=backup_dir,
                     passphrase=password
                 )
+                # Validate passphrase — EncryptedBackup.__init__ may succeed
+                # with a wrong password; the real check happens when accessing
+                # encrypted data.  Query the decrypted manifest to force
+                # keybag decryption now so we can surface a clear error.
+                with decrypted_backup.manifest_db_cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM Files")
             except Exception as e:
                 raise ValueError(f"Failed to decrypt backup: {e}")
 
@@ -456,13 +462,45 @@ class BackupManager:
             "info": backup_info,
         }
 
-    def validate_password(self, udid: str, password: str) -> dict:
-        """Test if a password is correct for an encrypted backup."""
-        try:
-            self.open_backup(udid, password=password)
+    def validate_password(self, udid: str, password: str,
+                          backup_dir: Optional[str] = None) -> dict:
+        """Fast check: is this passphrase correct for the encrypted backup?
+
+        Only decrypts the keybag / manifest — does NOT create an OpenBackup or
+        prewarm any files, so it returns in under a second.
+        """
+        # Resolve the backup directory (same logic as open_backup fast-path)
+        if backup_dir and os.path.isdir(backup_dir):
+            info = self._read_backup_info(backup_dir)
+            if not info:
+                for entry in os.scandir(backup_dir):
+                    if entry.is_dir():
+                        info = self._read_backup_info(entry.path)
+                        if info:
+                            backup_dir = entry.path
+                            break
+        else:
+            info = None
+            for b in self.list_backups()["backups"]:
+                if self._norm_udid(b["udid"]) == self._norm_udid(udid):
+                    info = b
+                    backup_dir = b["backup_dir"]
+                    break
+
+        if not info:
+            return {"valid": False, "error": "Backup not found"}
+        if not info.get("encrypted"):
             return {"valid": True}
-        except ValueError:
-            return {"valid": False}
+        if not HAS_DECRYPT:
+            return {"valid": False, "error": "Decryption library not installed"}
+
+        try:
+            eb = EncryptedBackup(backup_directory=backup_dir, passphrase=password)
+            with eb.manifest_db_cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM Files")
+            return {"valid": True}
+        except Exception:
+            return {"valid": False, "error": "Incorrect password"}
 
     def get_backup_size(self, backup_dir: str) -> dict:
         """

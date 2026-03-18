@@ -68,6 +68,18 @@ export function useBackup() {
     }
   }, []);
 
+  const validatePassword = useCallback(async (udid: string, password: string, backupDir?: string) => {
+    try {
+      const result = await sidecarCall<{ valid: boolean; error?: string }>(
+        'validate_password',
+        { udid, password, backup_dir: backupDir }
+      );
+      return result;
+    } catch {
+      return { valid: false, error: 'Validation failed' };
+    }
+  }, []);
+
   return {
     backups,
     activeBackup,
@@ -75,6 +87,7 @@ export function useBackup() {
     error,
     listBackups,
     openBackup,
+    validatePassword,
     setActiveBackup,
   };
 }

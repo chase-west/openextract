@@ -1,6 +1,6 @@
 {
   "name": "openextract",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Free, open-source iPhone backup extractor",
   "main": "dist-electron/main.js",
   "author": "OpenExtract Contributors",
@@ -70,6 +70,16 @@
         {
           "from": "python/dist/openextract-engine.exe",
           "to": "python/openextract-engine.exe"
+        }
+      ]
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Utility",
+      "extraResources": [
+        {
+          "from": "python/dist/openextract-engine",
+          "to": "python/openextract-engine"
         }
       ]
     }

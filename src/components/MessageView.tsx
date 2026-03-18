@@ -47,6 +47,8 @@ export default function MessageView({ udid }: Props) {
   } = useMessages(udid);
 
   const [convSearch, setConvSearch] = useState('');
+  const [minMessageCount, setMinMessageCount] = useState(0);
+  const [convDateFilter, setConvDateFilter] = useState('');
   const [msgSearch, setMsgSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -178,14 +180,24 @@ export default function MessageView({ udid }: Props) {
     }
   }
 
-  const filteredConversations = convSearch
-    ? conversations.filter(
-        (c) =>
-          c.display_name.toLowerCase().includes(convSearch.toLowerCase()) ||
-          c.chat_identifier.toLowerCase().includes(convSearch.toLowerCase()) ||
-          c.last_message_preview.toLowerCase().includes(convSearch.toLowerCase())
-      )
-    : conversations;
+  const filteredConversations = conversations.filter((c) => {
+    if (convSearch) {
+      const q = convSearch.toLowerCase();
+      if (
+        !c.display_name.toLowerCase().includes(q) &&
+        !c.chat_identifier.toLowerCase().includes(q) &&
+        !c.last_message_preview.toLowerCase().includes(q)
+      ) return false;
+    }
+    if (minMessageCount > 0 && c.message_count < minMessageCount) return false;
+    if (convDateFilter) {
+      if (!c.last_message_date) return false;
+      const convDate = new Date(c.last_message_date);
+      const filterDate = new Date(convDateFilter + 'T00:00:00');
+      if (convDate < filterDate) return false;
+    }
+    return true;
+  });
 
   const activeConversation = conversations.find((c) => c.chat_id === activeChat);
 
@@ -204,6 +216,39 @@ export default function MessageView({ udid }: Props) {
               className="w-full pl-8 pr-3 py-1.5 bg-elevated text-body text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus placeholder:text-text-tertiary"
               style={{ border: '0.5px solid var(--border-default)' }}
             />
+          </div>
+        </div>
+        <div className="px-3 py-2 space-y-1.5" style={{ borderBottom: '0.5px solid var(--border-subtle)' }}>
+          <div className="flex items-center gap-2">
+            <label className="text-caption text-text-tertiary whitespace-nowrap">Min messages</label>
+            <input
+              type="number"
+              min={0}
+              value={minMessageCount || ''}
+              placeholder="0"
+              onChange={(e) => setMinMessageCount(Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-full px-2 py-1 text-caption bg-elevated text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus placeholder:text-text-tertiary"
+              style={{ border: '0.5px solid var(--border-default)' }}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-caption text-text-tertiary whitespace-nowrap">After</label>
+            <input
+              type="date"
+              value={convDateFilter}
+              onChange={(e) => setConvDateFilter(e.target.value)}
+              className="w-full px-2 py-1 text-caption bg-elevated text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus"
+              style={{ border: '0.5px solid var(--border-default)' }}
+            />
+            {convDateFilter && (
+              <button
+                onClick={() => setConvDateFilter('')}
+                className="text-caption text-text-tertiary hover:text-text-primary transition-colors flex-shrink-0"
+                title="Clear date filter"
+              >
+                &times;
+              </button>
+            )}
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -251,7 +296,9 @@ export default function MessageView({ udid }: Props) {
           ))}
         </div>
         <div className="p-2 text-caption text-text-tertiary text-center" style={{ borderTop: '0.5px solid var(--border-subtle)' }}>
-          {conversations.length} conversations
+          {filteredConversations.length !== conversations.length
+            ? `${filteredConversations.length} of ${conversations.length} conversations`
+            : `${conversations.length} conversations`}
         </div>
       </div>
 

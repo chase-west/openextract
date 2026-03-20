@@ -311,7 +311,7 @@ export default function MessageView({ udid }: Props) {
               <div>
                 <div className="text-body font-medium text-text-primary">{activeConversation.display_name}</div>
                 <div className="text-caption text-text-secondary">
-                  {activeConversation.chat_identifier} &middot; {totalMessages} {filtersActive ? 'matching' : ''} messages
+                  {activeConversation.service} &middot; {totalMessages} {filtersActive ? 'matching' : ''} messages
                 </div>
               </div>
               <div className="flex items-center gap-2">

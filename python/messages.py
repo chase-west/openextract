@@ -408,14 +408,45 @@ class MessageExtractor:
             """).fetchall()
             _tlog(f"list_conversations: CTE query={time.perf_counter()-t1:.3f}s rows={len(rows)}")
 
+            # Batch-fetch participants for all chats to detect groups and
+            # build friendly names for group chats missing a display name.
+            # We query all chat_ids (not just those with "chat" in the
+            # identifier) because group chats can use hex UUID identifiers.
+            all_chat_ids = [row["chat_id"] for row in rows]
+            participants_map: dict[int, list[str]] = {}
+            if all_chat_ids:
+                placeholders = ",".join("?" * len(all_chat_ids))
+                part_rows = conn.execute(f"""
+                    SELECT chj.chat_id, h.id
+                    FROM chat_handle_join chj
+                    JOIN handle h ON h.ROWID = chj.handle_id
+                    WHERE chj.chat_id IN ({placeholders})
+                """, all_chat_ids).fetchall()
+                for pr in part_rows:
+                    participants_map.setdefault(pr["chat_id"], []).append(pr["id"])
+            _tlog(f"list_conversations: participants batch={len(all_chat_ids)} chats")
+
             t2 = time.perf_counter()
             for row in rows:
                 chat_identifier = row["chat_identifier"] or ""
                 display_name = row["display_name"] or ""
+                participant_count = len(participants_map.get(row["chat_id"], []))
+                is_group = participant_count > 1 or "chat" in chat_identifier.lower()
 
-                # Resolve contact name
+                # Resolve contact/group name
                 if not display_name:
-                    display_name = resolve_contact(chat_identifier, contacts)
+                    if is_group and row["chat_id"] in participants_map:
+                        handles = participants_map[row["chat_id"]]
+                        resolved = [(resolve_contact(h, contacts), h) for h in handles]
+                        # Put resolved names first so a known contact leads the label
+                        resolved.sort(key=lambda x: (not x[0], x[1]))
+                        names = [name or handle for name, handle in resolved]
+                        if len(names) <= 3:
+                            display_name = ", ".join(names)
+                        else:
+                            display_name = f"{names[0]} + {len(names) - 1}"
+                    else:
+                        display_name = resolve_contact(chat_identifier, contacts)
 
                 conversations.append({
                     "chat_id": row["chat_id"],
@@ -425,7 +456,7 @@ class MessageExtractor:
                     "message_count": row["message_count"],
                     "last_message_date": apple_date_to_iso(row["last_message_date"]),
                     "last_message_preview": (row["last_message_text"] or "")[:100],
-                    "is_group": "chat" in chat_identifier.lower(),
+                    "is_group": is_group,
                 })
             _tlog(f"list_conversations: contact-resolve loop={time.perf_counter()-t2:.3f}s convs={len(conversations)}")
         except Exception:

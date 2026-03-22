@@ -1010,3 +1010,140 @@ body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto;
                 f.write(f'<div class="msg {css_class}">{text}</div>\n')
             f.write("</body></html>")
         return {"file": filepath, "message_count": len(messages)}
+
+    # ── Multi-conversation export ──────────────────────────────────────────
+
+    def export_conversations(self, backup, chat_ids: list, conversation_names: dict,
+                             contacts: dict, fmt: str, output_dir: str,
+                             mode: str = "separate",
+                             date_from: Optional[str] = None,
+                             date_to: Optional[str] = None,
+                             query: Optional[str] = None) -> dict:
+        """Export multiple conversations.
+
+        mode="separate" — one file per conversation.
+        mode="merged"   — all messages in a single file, sorted by timestamp,
+                          with explicit sender/recipient context on each line.
+        """
+        if mode == "merged":
+            return self._export_merged(
+                backup, chat_ids, conversation_names, contacts, fmt, output_dir,
+                date_from=date_from, date_to=date_to, query=query
+            )
+
+        # Default: separate files
+        files = []
+        total_count = 0
+        for chat_id in chat_ids:
+            result = self.export_conversation(
+                backup, chat_id, contacts, fmt, output_dir,
+                date_from=date_from, date_to=date_to, query=query
+            )
+            if "error" not in result:
+                files.append(result["file"])
+                total_count += result["message_count"]
+        return {"files": files, "message_count": total_count}
+
+    def _collect_messages_for_chat(self, backup, chat_id, contacts,
+                                   date_from=None, date_to=None, query=None):
+        """Collect all messages for a single chat (with optional filters)."""
+        if query:
+            result = self.search_messages(
+                backup, query, contacts, chat_id,
+                date_from=date_from, date_to=date_to, limit=100000
+            )
+            return result["results"]
+        else:
+            all_messages = []
+            offset = 0
+            while True:
+                batch = self.get_messages(
+                    backup, chat_id, contacts, offset, 500,
+                    date_from=date_from, date_to=date_to
+                )
+                all_messages.extend(batch["messages"])
+                if offset + 500 >= batch["total"]:
+                    break
+                offset += 500
+            return all_messages
+
+    def _export_merged(self, backup, chat_ids, conversation_names, contacts,
+                       fmt, output_dir, date_from=None, date_to=None, query=None):
+        """Merge messages from multiple conversations into one file, sorted by timestamp."""
+        all_messages = []
+        for chat_id in chat_ids:
+            msgs = self._collect_messages_for_chat(
+                backup, chat_id, contacts, date_from, date_to, query
+            )
+            conv_name = conversation_names.get(chat_id, f"Chat {chat_id}")
+            for msg in msgs:
+                msg["_conversation"] = conv_name
+            all_messages.extend(msgs)
+
+        # Sort by timestamp
+        all_messages.sort(key=lambda m: m.get("date") or "")
+
+        if fmt == "txt":
+            return self._export_merged_txt(all_messages, output_dir)
+        elif fmt == "csv":
+            return self._export_merged_csv(all_messages, output_dir)
+        elif fmt == "html":
+            return self._export_merged_html(all_messages, output_dir)
+        else:
+            return {"error": f"Unsupported format: {fmt}"}
+
+    def _export_merged_txt(self, messages, output_dir):
+        filepath = os.path.join(output_dir, "merged_conversations.txt")
+        with open(filepath, "w", encoding="utf-8-sig") as f:
+            for msg in messages:
+                date = msg["date"] or "Unknown date"
+                sender = msg["sender"]
+                conv = msg["_conversation"]
+                direction = "to" if msg["is_from_me"] else "from"
+                text = self._message_text(msg) or "[No content]"
+                f.write(f"[{date}] ({direction} {conv}) {sender}: {text}\n")
+        return {"files": [filepath], "message_count": len(messages)}
+
+    def _export_merged_csv(self, messages, output_dir):
+        import csv
+        filepath = os.path.join(output_dir, "merged_conversations.csv")
+        with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Date", "Conversation", "Direction", "Sender", "Text", "Is From Me", "Has Attachments"])
+            for msg in messages:
+                direction = "Sent" if msg["is_from_me"] else "Received"
+                writer.writerow([
+                    msg["date"], msg["_conversation"], direction,
+                    msg["sender"], self._message_text(msg),
+                    msg["is_from_me"], msg["has_attachments"]
+                ])
+        return {"files": [filepath], "message_count": len(messages)}
+
+    def _export_merged_html(self, messages, output_dir):
+        filepath = os.path.join(output_dir, "merged_conversations.html")
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Merged Conversations Export</title>
+<style>
+body { font-family: -apple-system, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+.msg { margin: 8px 0; padding: 10px 14px; border-radius: 18px; max-width: 75%; clear: both; }
+.sent { background: #007AFF; color: white; float: right; border-bottom-right-radius: 4px; }
+.received { background: #E9E9EB; color: black; float: left; border-bottom-left-radius: 4px; }
+.meta { font-size: 11px; color: #888; clear: both; text-align: center; margin: 12px 0 4px; }
+.sender { font-size: 11px; color: #666; margin-bottom: 2px; }
+.conv-label { font-size: 10px; color: #999; font-style: italic; }
+</style></head><body>
+<h2>Merged Conversations</h2>
+""")
+            for msg in messages:
+                css_class = "sent" if msg["is_from_me"] else "received"
+                text = msg["text"] or "[Attachment]"
+                date = msg["date"] or ""
+                conv = msg["_conversation"]
+                direction = "to" if msg["is_from_me"] else "from"
+                f.write(f'<div class="meta">{date} <span class="conv-label">({direction} {conv})</span></div>\n')
+                if not msg["is_from_me"]:
+                    f.write(f'<div class="sender">{msg["sender"]}</div>\n')
+                f.write(f'<div class="msg {css_class}">{text}</div>\n')
+            f.write("</body></html>")
+        return {"files": [filepath], "message_count": len(messages)}

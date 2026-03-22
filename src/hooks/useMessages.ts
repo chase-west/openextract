@@ -50,6 +50,7 @@ export function useMessages(udid: string | undefined) {
   const [activeChat, setActiveChat] = useState<number | null>(null);
   const [totalMessages, setTotalMessages] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [selectedChats, setSelectedChats] = useState<Set<number>>(new Set());
 
   // Track active load context so loadMore can continue with same filters
   const activeChatRef = useRef<number | null>(null);
@@ -186,6 +187,50 @@ export function useMessages(udid: string | undefined) {
     );
   }, [udid]);
 
+  const toggleChatSelection = useCallback((chatId: number) => {
+    setSelectedChats(prev => {
+      const next = new Set(prev);
+      if (next.has(chatId)) next.delete(chatId);
+      else next.add(chatId);
+      return next;
+    });
+  }, []);
+
+  const selectAllChats = useCallback((chatIds: number[]) => {
+    setSelectedChats(new Set(chatIds));
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedChats(new Set());
+  }, []);
+
+  const exportConversations = useCallback(async (
+    chatIds: number[],
+    conversationNames: Record<number, string>,
+    format: 'txt' | 'csv' | 'html',
+    outputDir: string,
+    mode: 'merged' | 'separate',
+    dateFrom?: string,
+    dateTo?: string,
+    query?: string
+  ) => {
+    if (!udid) return null;
+    return sidecarCall<{ files: string[]; message_count: number }>(
+      'export_conversations',
+      {
+        udid,
+        chat_ids: chatIds,
+        conversation_names: conversationNames,
+        format,
+        output_dir: outputDir,
+        mode,
+        date_from: dateFrom,
+        date_to: dateTo,
+        query,
+      }
+    );
+  }, [udid]);
+
   return {
     conversations,
     messages,
@@ -193,11 +238,16 @@ export function useMessages(udid: string | undefined) {
     totalMessages,
     hasMore,
     loading,
+    selectedChats,
     loadConversations,
     loadMessages,
     loadMore,
     searchMessages,
     exportConversation,
+    exportConversations,
+    toggleChatSelection,
+    selectAllChats,
+    clearSelection,
     setActiveChat,
   };
 }

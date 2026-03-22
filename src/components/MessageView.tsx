@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
-import { Search, MessageSquare, Loader2 } from 'lucide-react';
+import { Search, MessageSquare, Loader2, CheckSquare, Square } from 'lucide-react';
 import { useMessages } from '../hooks/useMessages';
 import { formatRelative } from '../lib/dates';
 import { saveFolder } from '../lib/ipc';
@@ -39,11 +39,16 @@ export default function MessageView({ udid }: Props) {
     totalMessages,
     hasMore,
     loading,
+    selectedChats,
     loadConversations,
     loadMessages,
     loadMore,
     searchMessages,
     exportConversation,
+    exportConversations,
+    toggleChatSelection,
+    selectAllChats,
+    clearSelection,
   } = useMessages(udid);
 
   const [convSearch, setConvSearch] = useState('');
@@ -55,6 +60,9 @@ export default function MessageView({ udid }: Props) {
   const [filtersActive, setFiltersActive] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'csv' | 'html'>('txt');
   const [exporting, setExporting] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [showBulkExportDialog, setShowBulkExportDialog] = useState(false);
+  const [bulkExportMode, setBulkExportMode] = useState<'merged' | 'separate'>('separate');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
@@ -180,6 +188,37 @@ export default function MessageView({ udid }: Props) {
     }
   }
 
+  async function handleBulkExport() {
+    if (selectedChats.size === 0) return;
+    const dir = await saveFolder();
+    if (!dir) return;
+    setExporting(true);
+    setShowBulkExportDialog(false);
+    try {
+      const chatIds = Array.from(selectedChats);
+      const conversationNames: Record<number, string> = {};
+      for (const conv of conversations) {
+        if (selectedChats.has(conv.chat_id)) {
+          conversationNames[conv.chat_id] = conv.display_name;
+        }
+      }
+      const result = await exportConversations(
+        chatIds, conversationNames, exportFormat, dir, bulkExportMode,
+        dateFrom ? localDateToISO(dateFrom, false) : undefined,
+        dateTo ? localDateToISO(dateTo, true) : undefined,
+        msgSearch.trim() || undefined
+      );
+      if (result) {
+        const fileList = result.files.join('\n');
+        alert(`Exported ${result.message_count} messages across ${result.files.length} file(s):\n${fileList}`);
+      }
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const filteredConversations = conversations.filter((c) => {
     if (convSearch) {
       const q = convSearch.toLowerCase();
@@ -216,6 +255,51 @@ export default function MessageView({ udid }: Props) {
               className="w-full pl-8 pr-3 py-1.5 bg-elevated text-body text-text-primary rounded-md focus:outline-none focus:ring-2 focus:shadow-focus placeholder:text-text-tertiary"
               style={{ border: '0.5px solid var(--border-default)' }}
             />
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <button
+              onClick={() => {
+                if (selectMode) { clearSelection(); setSelectMode(false); }
+                else setSelectMode(true);
+              }}
+              className={`text-caption px-2 py-1 rounded-md transition-colors ${
+                selectMode
+                  ? 'bg-accent text-white'
+                  : 'bg-base text-text-secondary hover:bg-elevated'
+              }`}
+              style={{ border: '0.5px solid var(--border-default)' }}
+            >
+              {selectMode ? 'Cancel select' : 'Select'}
+            </button>
+            {selectMode && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const allIds = filteredConversations.map(c => c.chat_id);
+                    if (selectedChats.size === allIds.length && allIds.every(id => selectedChats.has(id))) {
+                      clearSelection();
+                    } else {
+                      selectAllChats(allIds);
+                    }
+                  }}
+                  className="text-caption px-2 py-1 rounded-md bg-base text-text-secondary hover:bg-elevated transition-colors"
+                  style={{ border: '0.5px solid var(--border-default)' }}
+                >
+                  {filteredConversations.length > 0 && filteredConversations.every(c => selectedChats.has(c.chat_id))
+                    ? 'Deselect all'
+                    : 'Select all'}
+                </button>
+                {selectedChats.size > 0 && (
+                  <button
+                    onClick={() => setShowBulkExportDialog(true)}
+                    disabled={exporting}
+                    className="text-caption px-2 py-1 rounded-md bg-accent text-white hover:bg-accent-hover transition-colors disabled:opacity-50"
+                  >
+                    {exporting ? 'Exporting...' : `Export ${selectedChats.size}`}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="px-3 py-2 space-y-1.5" style={{ borderBottom: '0.5px solid var(--border-subtle)' }}>
@@ -262,34 +346,48 @@ export default function MessageView({ udid }: Props) {
             <button
               key={conv.chat_id}
               onClick={() => {
-                handleClearFilters(false);
-                loadMessages(conv.chat_id);
+                if (selectMode) {
+                  toggleChatSelection(conv.chat_id);
+                } else {
+                  handleClearFilters(false);
+                  loadMessages(conv.chat_id);
+                }
               }}
               className={`w-full text-left px-4 py-2.5 transition-colors duration-200 ${
-                activeChat === conv.chat_id
+                activeChat === conv.chat_id && !selectMode
                   ? 'bg-accent-subtle'
-                  : 'hover:bg-sidebar-active'
+                  : selectMode && selectedChats.has(conv.chat_id)
+                    ? 'bg-accent-subtle'
+                    : 'hover:bg-sidebar-active'
               }`}
               style={{
                 borderBottom: '0.5px solid var(--border-subtle)',
-                borderLeft: activeChat === conv.chat_id ? '2px solid var(--accent)' : '2px solid transparent',
+                borderLeft: (selectMode ? selectedChats.has(conv.chat_id) : activeChat === conv.chat_id)
+                  ? '2px solid var(--accent)' : '2px solid transparent',
               }}
             >
               <div className="flex justify-between items-start">
-                <div className="text-body font-medium text-text-primary truncate flex-1">
-                  {conv.display_name}
-                  {conv.is_group && (
-                    <span className="ml-1 text-caption text-text-tertiary">Group</span>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {selectMode && (
+                    selectedChats.has(conv.chat_id)
+                      ? <CheckSquare size={16} strokeWidth={1.5} className="text-accent flex-shrink-0" />
+                      : <Square size={16} strokeWidth={1.5} className="text-text-tertiary flex-shrink-0" />
                   )}
+                  <div className="text-body font-medium text-text-primary truncate">
+                    {conv.display_name}
+                    {conv.is_group && (
+                      <span className="ml-1 text-caption text-text-tertiary">Group</span>
+                    )}
+                  </div>
                 </div>
                 <span className="text-caption text-text-tertiary ml-2 flex-shrink-0">
                   {formatRelative(conv.last_message_date)}
                 </span>
               </div>
-              <div className="text-caption text-text-secondary truncate mt-0.5">
+              <div className={`text-caption text-text-secondary truncate mt-0.5 ${selectMode ? 'ml-6' : ''}`}>
                 {conv.last_message_preview || 'No messages'}
               </div>
-              <div className="text-caption text-text-tertiary mt-0.5">
+              <div className={`text-caption text-text-tertiary mt-0.5 ${selectMode ? 'ml-6' : ''}`}>
                 {conv.message_count} messages
               </div>
             </button>
@@ -463,6 +561,81 @@ export default function MessageView({ udid }: Props) {
           </div>
         )}
       </div>
+
+      {/* Bulk export dialog */}
+      {showBulkExportDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowBulkExportDialog(false)}>
+          <div className="bg-surface rounded-lg p-6 w-96 shadow-xl" style={{ border: '0.5px solid var(--border-default)' }} onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-body font-medium text-text-primary mb-4">
+              Export {selectedChats.size} conversation{selectedChats.size > 1 ? 's' : ''}
+            </h3>
+
+            <div className="space-y-3 mb-4">
+              <label className="text-caption text-text-secondary">Export mode</label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-3 cursor-pointer p-2 rounded-md hover:bg-elevated transition-colors">
+                  <input
+                    type="radio"
+                    name="bulkExportMode"
+                    value="separate"
+                    checked={bulkExportMode === 'separate'}
+                    onChange={() => setBulkExportMode('separate')}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <div className="text-body text-text-primary">Separate files</div>
+                    <div className="text-caption text-text-tertiary">Each conversation exported to its own file</div>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer p-2 rounded-md hover:bg-elevated transition-colors">
+                  <input
+                    type="radio"
+                    name="bulkExportMode"
+                    value="merged"
+                    checked={bulkExportMode === 'merged'}
+                    onChange={() => setBulkExportMode('merged')}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <div className="text-body text-text-primary">Merged into one file</div>
+                    <div className="text-caption text-text-tertiary">All messages sorted by timestamp with sender/recipient labels</div>
+                  </div>
+                </label>
+              </div>
+
+              <div>
+                <label className="text-caption text-text-secondary">Format</label>
+                <select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value as 'txt' | 'csv' | 'html')}
+                  className="w-full mt-1 text-body bg-base text-text-primary rounded-md px-2 py-1.5 focus:outline-none focus:shadow-focus"
+                  style={{ border: '0.5px solid var(--border-default)' }}
+                >
+                  <option value="txt">TXT</option>
+                  <option value="csv">CSV</option>
+                  <option value="html">HTML</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowBulkExportDialog(false)}
+                className="px-4 py-1.5 text-body text-text-secondary rounded-md hover:bg-elevated transition-colors"
+                style={{ border: '0.5px solid var(--border-default)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkExport}
+                className="px-4 py-1.5 text-body bg-accent text-white rounded-md hover:bg-accent-hover transition-colors"
+              >
+                Export
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

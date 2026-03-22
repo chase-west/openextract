@@ -60,6 +60,7 @@ class SidecarServer:
             "list_contacts": self.list_contacts,
             "list_notes": self.list_notes,
             "export_conversation": self.export_conversation,
+            "export_conversations": self.export_conversations,
             "export_photos": self.export_photos,
             "export_voicemails": self.export_voicemails,
             "export_calls": self.export_calls,
@@ -226,6 +227,25 @@ class SidecarServer:
         return self.message_extractor.export_conversation(
             backup, chat_id, contacts, fmt, output_dir,
             date_from=date_from, date_to=date_to, query=query
+        )
+
+    def export_conversations(self, params):
+        udid = params["udid"]
+        chat_ids = params["chat_ids"]
+        conversation_names = params.get("conversation_names", {})
+        fmt = params.get("format", "txt")
+        output_dir = params.get("output_dir", ".")
+        mode = params.get("mode", "separate")
+        date_from = params.get("date_from")
+        date_to = params.get("date_to")
+        query = params.get("query")
+        backup = self.backup_manager.get_open_backup(udid)
+        contacts = self.contact_resolver.load_contacts(backup)
+        # conversation_names comes as JSON object with string keys; convert to int keys
+        conv_names = {int(k): v for k, v in conversation_names.items()}
+        return self.message_extractor.export_conversations(
+            backup, chat_ids, conv_names, contacts, fmt, output_dir,
+            mode=mode, date_from=date_from, date_to=date_to, query=query
         )
 
     def export_photos(self, params):
